@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  BarChart3, Briefcase, Calendar, Plus, DollarSign, Users, Target,
-  CheckCircle2, XCircle, Clock, Edit2, Download, UserCircle, ShieldAlert,
-  LogOut, Mail, Lock, Settings, UserPlus, Trash2, Key, Eye, EyeOff, User
+  BarChart3, Briefcase, Calendar, Users, Edit2, Download, LogOut, Lock, Eye, EyeOff, User, Trash2
 } from 'lucide-react';
 
 // --- 1. CONEXIÓN A FIREBASE ---
@@ -24,7 +22,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- 2. DATOS INICIALES (Agencias Personalizadas) ---
+// --- 2. DATOS INICIALES ---
 const ESTATUS = ['Enviada', 'Cerrada', 'Perdida'];
 
 const USUARIOS_INICIALES = [
@@ -52,7 +50,6 @@ const obtenerRangoSemana = (fechaString) => {
   }
 };
 
-// --- 3. APLICACIÓN PRINCIPAL ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -100,7 +97,6 @@ export default function App() {
     const unsubCitas = onSnapshot(collection(db, 'citas'), snapshot => setCitasGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.createdAt - a.createdAt)));
     const unsubUsuarios = onSnapshot(collection(db, 'usuarios'), snapshot => setUsuariosGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubSolicitudes = onSnapshot(collection(db, 'solicitudes'), snapshot => setSolicitudesGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-
     return () => { unsubPropuestas(); unsubCitas(); unsubUsuarios(); unsubSolicitudes(); };
   }, [user]);
 
@@ -153,14 +149,14 @@ export default function App() {
     try {
       await setDoc(doc(db, 'usuarios', formUsuario.email.trim().toLowerCase()), { ...formUsuario, email: formUsuario.email.trim().toLowerCase(), agencias: arregloAgencias });
       setFormUsuario({ email: '', nombre: '', rol: 'comercial', password: '', agencias: '' });
-      alert('Usuario guardado.');
+      alert('Usuario guardado con éxito.');
     } catch (error) { console.error(error); }
   };
 
   const handleAprobarSolicitud = async (solicitud) => {
     setFormUsuario({ email: solicitud.email, nombre: '', rol: 'comercial', password: '', agencias: '' });
     await deleteDoc(doc(db, 'solicitudes', solicitud.id));
-    alert("Procesando... Asigna Nombre, Rol, Agencias y Contraseña.");
+    alert("Procesando... Asigna Nombre, Rol, Agencias y Contraseña abajo.");
   };
 
   const handleCambiarContra = async (e) => {
@@ -211,19 +207,20 @@ export default function App() {
 
   const fMoney = m => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(m);
 
-  if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-medium">Conectando a TapTap...</div>;
+  if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-900 font-medium">Conectando a TapTap...</div>;
 
   if (!perfil) return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border-t-4 border-blue-600 text-center">
-        {/* AQUÍ VA TU LOGO EN LA PANTALLA DE LOGIN */}
-        <img src="/logo.png" alt="TapTap Logo" className="mx-auto h-16 mb-6 object-contain" />
+        {/* LOGO GIGANTE EN EL LOGIN */}
+        <img src="/logo.png" alt="TapTap Logo" className="mx-auto h-24 md:h-32 mb-6 object-contain" />
         
-        <h1 className="text-2xl font-bold mb-2">Portal Comercial</h1>
-        <p className="text-gray-500 mb-6 text-sm">Ingresa con tu correo de TapTap Digital.</p>
+        {/* TITULO CON COLOR NEGRO FORZADO */}
+        <h1 className="text-2xl font-bold mb-2 text-slate-900">Portal Comercial</h1>
+        <p className="text-gray-600 mb-6 text-sm">Ingresa con tu correo de TapTap Digital.</p>
         <form onSubmit={handleLogin} className="space-y-4 text-left">
-          <div><label className="text-sm font-medium text-gray-700">Correo</label><input type="email" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /></div>
-          <div><label className="text-sm font-medium text-gray-700">Contraseña</label><div className="relative"><input type={showPassword?"text":"password"} value={passwordInput} onChange={e=>setPasswordInput(e.target.value)} className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /><button type="button" onClick={()=>setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-400">{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></div>
+          <div><label className="text-sm font-medium text-slate-900">Correo</label><input type="email" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="w-full p-3 bg-white text-slate-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /></div>
+          <div><label className="text-sm font-medium text-slate-900">Contraseña</label><div className="relative"><input type={showPassword?"text":"password"} value={passwordInput} onChange={e=>setPasswordInput(e.target.value)} className="w-full p-3 bg-white text-slate-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /><button type="button" onClick={()=>setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-500 hover:text-slate-900">{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></div>
           {loginError && <p className="text-red-600 text-sm bg-red-50 p-2 rounded">{loginError}</p>}
           {mensajeExito && <p className="text-green-600 text-sm bg-green-50 p-2 rounded">{mensajeExito}</p>}
           <button type="submit" className="w-full py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-colors">Iniciar Sesión</button>
@@ -235,43 +232,48 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-slate-900 text-white p-4 flex flex-col justify-between">
+      {/* --- NUEVO DISEÑO DE BARRA LATERAL (TEMA CLARO/BLANCO) --- */}
+      <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 flex flex-col justify-between shadow-sm z-10">
         <div>
-          {/* AQUÍ VA TU LOGO EN EL MENÚ LATERAL OSCURO (CON FONDO BLANCO) */}
-          <div className="bg-white rounded-lg p-4 mb-4 flex justify-center shadow-sm">
-            <img src="/logo.png" alt="TapTap Logo" className="h-8 object-contain" />
+          {/* LOGO EN EL MENÚ (MÁS GRANDE Y SIN CAJA) */}
+          <div className="mb-8 mt-2 flex justify-center px-2">
+            <img src="/logo.png" alt="TapTap Logo" className="h-12 md:h-16 object-contain" />
           </div>
 
-          <div className="bg-slate-800 p-2 rounded text-xs mb-6 text-center">{perfil.toUpperCase()}: {nombreUsuario}</div>
+          <div className="bg-gray-100 text-slate-800 font-bold p-2 rounded text-xs mb-6 text-center border border-gray-200">
+            {perfil.toUpperCase()}: {nombreUsuario}
+          </div>
+          
           <nav className="flex flex-col gap-2">
-            <button onClick={()=>setActiveTab('dashboard')} className={`p-3 rounded flex gap-3 ${activeTab==='dashboard'?'bg-blue-600':'hover:bg-slate-800'}`}><BarChart3 size={20}/>Dashboard</button>
-            <button onClick={()=>setActiveTab('propuestas')} className={`p-3 rounded flex gap-3 ${activeTab==='propuestas'?'bg-blue-600':'hover:bg-slate-800'}`}><Briefcase size={20}/>Propuestas</button>
-            <button onClick={()=>setActiveTab('citas')} className={`p-3 rounded flex gap-3 ${activeTab==='citas'?'bg-blue-600':'hover:bg-slate-800'}`}><Calendar size={20}/>Reuniones</button>
-            {perfil === 'admin' && <button onClick={()=>setActiveTab('usuarios')} className={`p-3 rounded flex gap-3 ${activeTab==='usuarios'?'bg-purple-600':'hover:bg-slate-800'}`}><Users size={20}/>Usuarios</button>}
+            <button onClick={()=>setActiveTab('dashboard')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='dashboard'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><BarChart3 size={20}/>Dashboard</button>
+            <button onClick={()=>setActiveTab('propuestas')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='propuestas'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Briefcase size={20}/>Propuestas</button>
+            <button onClick={()=>setActiveTab('citas')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='citas'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Calendar size={20}/>Reuniones</button>
+            {perfil === 'admin' && <button onClick={()=>setActiveTab('usuarios')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='usuarios'?'bg-purple-50 text-purple-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Users size={20}/>Usuarios</button>}
           </nav>
         </div>
-        <div className="mt-8 space-y-3">
-          <button onClick={()=>setActiveTab('perfil')} className={`w-full p-2 flex justify-center gap-2 rounded font-medium ${activeTab==='perfil'?'bg-slate-700 text-white':'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16}/>Mi Perfil</button>
-          <button onClick={handleExportCSV} className="w-full p-3 bg-emerald-600 rounded flex justify-center gap-2 hover:bg-emerald-500 font-medium"><Download size={18}/>Descargar CSV</button>
-          <button onClick={()=>{setPerfil(null);setEmailInput('');setPasswordInput('');}} className="w-full p-2 text-slate-400 hover:text-white flex justify-center gap-2 hover:bg-slate-800 rounded font-medium"><LogOut size={16}/>Salir</button>
+        
+        <div className="mt-8 space-y-3 pt-4 border-t border-gray-100">
+          <button onClick={()=>setActiveTab('perfil')} className={`w-full p-2 flex justify-center gap-2 rounded-lg transition-colors ${activeTab==='perfil'?'bg-gray-100 text-slate-900 font-bold':'text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-medium'}`}><User size={16}/>Mi Perfil</button>
+          <button onClick={handleExportCSV} className="w-full p-3 bg-emerald-600 text-white rounded-lg flex justify-center gap-2 hover:bg-emerald-700 font-medium shadow-sm"><Download size={18}/>Descargar CSV</button>
+          <button onClick={()=>{setPerfil(null);setEmailInput('');setPasswordInput('');}} className="w-full p-2 text-red-600 hover:text-red-800 flex justify-center gap-2 hover:bg-red-50 rounded-lg font-medium transition-colors"><LogOut size={16}/>Salir</button>
         </div>
       </aside>
       
-      <main className="flex-1 p-6 overflow-y-auto text-gray-800">
+      <main className="flex-1 p-6 overflow-y-auto text-slate-900">
         {activeTab === 'perfil' && (
-          <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-10">
-            <h2 className="text-2xl font-bold mb-6 text-center">Mi Perfil</h2>
+          <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-200 mt-10">
+            <h2 className="text-2xl font-bold mb-6 text-center text-slate-900">Mi Perfil</h2>
             <div className="space-y-4 mb-8">
-              <div><p className="text-sm text-gray-500">Nombre</p><p className="font-medium text-lg">{nombreUsuario}</p></div>
-              <div><p className="text-sm text-gray-500">Correo</p><p className="font-medium">{currentEmail}</p></div>
-              <div><p className="text-sm text-gray-500">Rol en el sistema</p><p className="font-medium uppercase text-blue-600">{perfil}</p></div>
-              <div><p className="text-sm text-gray-500">Tus Agencias Asignadas</p><div className="flex flex-wrap gap-2 mt-1">{agenciasDelUsuario.map(a=><span key={a} className="bg-gray-100 px-3 py-1 rounded-full text-sm">{a}</span>)}</div></div>
+              <div><p className="text-sm text-gray-500 font-medium">Nombre</p><p className="font-bold text-lg text-slate-900">{nombreUsuario}</p></div>
+              <div><p className="text-sm text-gray-500 font-medium">Correo</p><p className="font-bold text-slate-900">{currentEmail}</p></div>
+              <div><p className="text-sm text-gray-500 font-medium">Rol en el sistema</p><p className="font-bold uppercase text-blue-600">{perfil}</p></div>
+              <div><p className="text-sm text-gray-500 font-medium">Tus Agencias Asignadas</p><div className="flex flex-wrap gap-2 mt-1">{agenciasDelUsuario.map(a=><span key={a} className="bg-gray-100 px-3 py-1 rounded-full text-sm font-semibold text-slate-900 border border-gray-200">{a}</span>)}</div></div>
             </div>
-            <div className="border-t pt-6">
-              <h3 className="font-bold mb-4 text-gray-700">Cambiar mi Contraseña</h3>
+            <div className="border-t border-gray-200 pt-6">
+              <h3 className="font-bold mb-4 text-slate-900">Cambiar mi Contraseña</h3>
               <form onSubmit={handleCambiarContra} className="flex gap-2">
-                <input required type="text" placeholder="Nueva contraseña" value={nuevaContra} onChange={e=>setNuevaContra(e.target.value)} className="flex-1 bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500" />
-                <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded font-medium hover:bg-slate-800">Actualizar</button>
+                <input required type="text" placeholder="Nueva contraseña" value={nuevaContra} onChange={e=>setNuevaContra(e.target.value)} className="flex-1 bg-white text-slate-900 border border-gray-300 p-2 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800">Actualizar</button>
               </form>
             </div>
           </div>
@@ -279,88 +281,92 @@ export default function App() {
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Panel de Control</h2>
+            <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
               <div className="flex gap-2">
-                {['jefe','admin'].includes(perfil) && <select className="p-2 bg-white text-gray-900 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500" value={filtroVendedor} onChange={e=>setFiltroVendedor(e.target.value)}><option value="Todos">Todos</option>{vendedoresDisponibles.map(v=><option key={v}>{v}</option>)}</select>}
-                <select className="p-2 bg-white text-gray-900 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500" value={filtroSemana} onChange={e=>setFiltroSemana(e.target.value)}><option value="Todas">Todas las Semanas</option>{semanasDisponibles.map(s=><option key={s}>{s}</option>)}</select>
+                {['jefe','admin'].includes(perfil) && <select className="p-2 bg-white text-slate-900 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium" value={filtroVendedor} onChange={e=>setFiltroVendedor(e.target.value)}><option value="Todos">Todos los Vendedores</option>{vendedoresDisponibles.map(v=><option key={v}>{v}</option>)}</select>}
+                <select className="p-2 bg-white text-slate-900 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium" value={filtroSemana} onChange={e=>setFiltroSemana(e.target.value)}><option value="Todas">Todas las Semanas</option>{semanasDisponibles.map(s=><option key={s}>{s}</option>)}</select>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded shadow"><p className="text-sm text-gray-500">Enviado</p><p className="text-xl font-bold">{fMoney(metricas.totalEnviado)}</p></div>
-              <div className="bg-white p-4 rounded shadow border-b-4 border-green-500"><p className="text-sm text-gray-500">Cerrado</p><p className="text-xl font-bold text-green-700">{fMoney(metricas.totalCerrado)}</p></div>
-              <div className="bg-white p-4 rounded shadow border-b-4 border-purple-500"><p className="text-sm text-gray-500">Citas</p><p className="text-xl font-bold text-purple-700">{metricas.totalCitas}</p></div>
-              <div className="bg-white p-4 rounded shadow border-b-4 border-orange-500"><p className="text-sm text-gray-500">Tasa Cierre</p><p className="text-xl font-bold text-orange-700">{metricas.tasaBateo}%</p></div>
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200"><p className="text-sm text-gray-500 font-medium">Enviado</p><p className="text-xl font-bold text-slate-900">{fMoney(metricas.totalEnviado)}</p></div>
+              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-green-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Cerrado</p><p className="text-xl font-bold text-green-700">{fMoney(metricas.totalCerrado)}</p></div>
+              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-purple-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Citas</p><p className="text-xl font-bold text-purple-700">{metricas.totalCitas}</p></div>
+              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-orange-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Tasa Cierre</p><p className="text-xl font-bold text-orange-700">{metricas.tasaBateo}%</p></div>
             </div>
-            <div className="bg-white rounded shadow p-4">
-              <h3 className="font-bold mb-4">Por Agencia</h3>
-              <table className="w-full text-sm"><thead className="bg-gray-100 text-gray-700 uppercase"><tr><th className="p-2 text-left">Agencia</th><th className="p-2 text-right">Enviado</th><th className="p-2 text-right">Cerrado</th><th className="p-2 text-center">Citas</th></tr></thead>
-              <tbody>{metricas.resumen.map(r=><tr key={r.agencia} className="border-b"><td className="p-2 font-medium text-gray-900">{r.agencia}</td><td className="p-2 text-right text-gray-600">{fMoney(r.enviado)}</td><td className="p-2 text-right text-green-600 font-bold">{fMoney(r.cerrado)}</td><td className="p-2 text-center">{r.citas}</td></tr>)}</tbody></table>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <h3 className="font-bold mb-4 text-slate-900">Por Agencia</h3>
+              <table className="w-full text-sm"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-right border-b border-gray-200">Enviado</th><th className="p-3 text-right border-b border-gray-200">Cerrado</th><th className="p-3 text-center border-b border-gray-200">Citas</th></tr></thead>
+              <tbody>{metricas.resumen.map(r=><tr key={r.agencia} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-bold text-slate-900">{r.agencia}</td><td className="p-3 text-right font-medium text-slate-700">{fMoney(r.enviado)}</td><td className="p-3 text-right text-green-700 font-bold">{fMoney(r.cerrado)}</td><td className="p-3 text-center font-bold text-slate-900">{r.citas}</td></tr>)}</tbody></table>
             </div>
           </div>
         )}
 
         {activeTab === 'propuestas' && (
           <div className="space-y-6">
-            <div className="bg-white p-4 rounded shadow"><h3 className="font-bold mb-4 text-lg">Nueva Propuesta</h3>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nueva Propuesta</h3>
               <form onSubmit={handleSubmitPropuesta} className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <input required type="date" value={fechaPropuesta} onChange={e=>{setFechaPropuesta(e.target.value);setFormPropuesta({...formPropuesta, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <select value={formPropuesta.agencia} onChange={e=>setFormPropuesta({...formPropuesta, agencia: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500">
+                <input required type="date" value={fechaPropuesta} onChange={e=>{setFechaPropuesta(e.target.value);setFormPropuesta({...formPropuesta, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <select value={formPropuesta.agencia} onChange={e=>setFormPropuesta({...formPropuesta, agencia: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
                   {agenciasDelUsuario.map(a=><option key={a} value={a}>{a}</option>)}
                 </select>
-                <input required placeholder="Proyecto" value={formPropuesta.nombre} onChange={e=>setFormPropuesta({...formPropuesta, nombre: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <input required type="number" placeholder="Monto Enviado $" value={formPropuesta.montoEnviado} onChange={e=>setFormPropuesta({...formPropuesta, montoEnviado: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <select value={formPropuesta.estatus} onChange={e=>setFormPropuesta({...formPropuesta, estatus: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500">{ESTATUS.map(a=><option key={a} value={a}>{a}</option>)}</select>
-                <input type="number" placeholder="Monto Cerrado $" disabled={formPropuesta.estatus!=='Cerrada'} value={formPropuesta.montoCerrado} onChange={e=>setFormPropuesta({...formPropuesta, montoCerrado: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <div className="col-span-full text-right"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700">Guardar</button></div>
+                <input required placeholder="Proyecto" value={formPropuesta.nombre} onChange={e=>setFormPropuesta({...formPropuesta, nombre: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <input required type="number" placeholder="Monto Enviado $" value={formPropuesta.montoEnviado} onChange={e=>setFormPropuesta({...formPropuesta, montoEnviado: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <select value={formPropuesta.estatus} onChange={e=>setFormPropuesta({...formPropuesta, estatus: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">{ESTATUS.map(a=><option key={a} value={a}>{a}</option>)}</select>
+                <input type="number" placeholder="Monto Cerrado $" disabled={formPropuesta.estatus!=='Cerrada'} value={formPropuesta.montoCerrado} onChange={e=>setFormPropuesta({...formPropuesta, montoCerrado: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <div className="col-span-full text-right"><button type="submit" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-sm">Guardar Propuesta</button></div>
               </form>
             </div>
-            <div className="bg-white p-4 rounded shadow overflow-x-auto"><h3 className="font-bold mb-4 text-lg">Historial</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-gray-700 uppercase"><tr><th className="p-2 text-left">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-2 text-left text-purple-700">Vendedor</th>}<th className="p-2 text-left">Agencia</th><th className="p-2 text-left">Proyecto</th><th className="p-2 text-left">Estatus</th><th className="p-2 text-right">Cerrado</th><th className="p-2 text-center">Edit</th></tr></thead>
-              <tbody>{misPropuestas.map(p=><tr key={p.id} className="border-b"><td className="p-2 text-gray-600">{p.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-2 text-purple-700 font-semibold">{p.vendedor}</td>}<td className="p-2 font-medium text-gray-900">{p.agencia}</td><td className="p-2 text-gray-700">{p.nombre}</td><td className="p-2">{p.estatus}</td><td className="p-2 text-green-600 font-bold text-right">{p.estatus==='Cerrada'?fMoney(p.montoCerrado):'-'}</td><td className="p-2 text-center"><button onClick={()=>{setEditingPropuestaId(p.id);setFormPropuesta(p);setFechaPropuesta(p.fechaCruda||'')}} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50 transition-colors"><Edit2 size={16}/></button></td></tr>)}</tbody></table>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Historial</h3>
+              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-3 text-left text-purple-800 border-b border-gray-200">Vendedor</th>}<th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-left border-b border-gray-200">Proyecto</th><th className="p-3 text-left border-b border-gray-200">Estatus</th><th className="p-3 text-right border-b border-gray-200">Cerrado</th><th className="p-3 text-center border-b border-gray-200">Editar</th></tr></thead>
+              <tbody>{misPropuestas.map(p=><tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-medium text-slate-700">{p.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-3 text-purple-700 font-bold">{p.vendedor}</td>}<td className="p-3 font-bold text-slate-900">{p.agencia}</td><td className="p-3 font-medium text-slate-800">{p.nombre}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${p.estatus==='Cerrada'?'bg-green-100 text-green-800':p.estatus==='Enviada'?'bg-blue-100 text-blue-800':'bg-red-100 text-red-800'}`}>{p.estatus}</span></td><td className="p-3 text-green-700 font-bold text-right">{p.estatus==='Cerrada'?fMoney(p.montoCerrado):'-'}</td><td className="p-3 text-center"><button onClick={()=>{setEditingPropuestaId(p.id);setFormPropuesta(p);setFechaPropuesta(p.fechaCruda||'')}} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-100 transition-colors"><Edit2 size={16}/></button></td></tr>)}</tbody></table>
             </div>
           </div>
         )}
 
         {activeTab === 'citas' && (
           <div className="space-y-6">
-            <div className="bg-white p-4 rounded shadow"><h3 className="font-bold mb-4 text-lg">Nueva Cita</h3>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nueva Cita</h3>
               <form onSubmit={handleAddCita} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <input required type="date" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setFormCita({...formCita, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <select value={formCita.agencia} onChange={e=>setFormCita({...formCita, agencia: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500">
+                <input required type="date" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setFormCita({...formCita, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <select value={formCita.agencia} onChange={e=>setFormCita({...formCita, agencia: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
                   {agenciasDelUsuario.map(a=><option key={a} value={a}>{a}</option>)}
                 </select>
-                <input required placeholder="Persona" value={formCita.persona} onChange={e=>setFormCita({...formCita, persona: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <input required placeholder="Cuenta (ej. Netflix)" value={formCita.cuenta} onChange={e=>setFormCita({...formCita, cuenta: e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <div className="col-span-full text-right"><button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded font-medium hover:bg-purple-700">Guardar</button></div>
+                <input required placeholder="Persona" value={formCita.persona} onChange={e=>setFormCita({...formCita, persona: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <input required placeholder="Cuenta (ej. Netflix)" value={formCita.cuenta} onChange={e=>setFormCita({...formCita, cuenta: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <div className="col-span-full text-right"><button type="submit" className="bg-purple-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-purple-700 shadow-sm">Guardar Cita</button></div>
               </form>
             </div>
-            <div className="bg-white p-4 rounded shadow overflow-x-auto"><h3 className="font-bold mb-4 text-lg">Historial</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-gray-700 uppercase"><tr><th className="p-2 text-left">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-2 text-left text-purple-700">Vendedor</th>}<th className="p-2 text-left">Agencia</th><th className="p-2 text-left">Persona</th><th className="p-2 text-left">Cuenta</th></tr></thead>
-              <tbody>{misCitas.map(c=><tr key={c.id} className="border-b"><td className="p-2 text-gray-600">{c.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-2 text-purple-700 font-semibold">{c.vendedor}</td>}<td className="p-2 font-medium text-gray-900">{c.agencia}</td><td className="p-2 text-gray-700">{c.persona}</td><td className="p-2"><span className="bg-gray-100 px-2 py-1 rounded text-xs font-semibold">{c.cuenta}</span></td></tr>)}</tbody></table>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Historial</h3>
+              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-3 text-left text-purple-800 border-b border-gray-200">Vendedor</th>}<th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-left border-b border-gray-200">Persona</th><th className="p-3 text-left border-b border-gray-200">Cuenta</th></tr></thead>
+              <tbody>{misCitas.map(c=><tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-medium text-slate-700">{c.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-3 text-purple-700 font-bold">{c.vendedor}</td>}<td className="p-3 font-bold text-slate-900">{c.agencia}</td><td className="p-3 font-medium text-slate-800">{c.persona}</td><td className="p-3"><span className="bg-gray-200 border border-gray-300 px-2 py-1 rounded text-xs font-bold text-slate-900">{c.cuenta}</span></td></tr>)}</tbody></table>
             </div>
           </div>
         )}
 
         {activeTab === 'usuarios' && perfil === 'admin' && (
           <div className="space-y-6">
-            <div className="bg-white p-4 rounded shadow"><h3 className="font-bold mb-4 text-lg">Nuevo Usuario</h3>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nuevo Usuario</h3>
               <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input required type="email" placeholder="Correo (@taptapdigital.com)" value={formUsuario.email} onChange={e=>setFormUsuario({...formUsuario, email:e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <input required placeholder="Nombre Completo" value={formUsuario.nombre} onChange={e=>setFormUsuario({...formUsuario, nombre:e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <select value={formUsuario.rol} onChange={e=>setFormUsuario({...formUsuario, rol:e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"><option value="comercial">Comercial</option><option value="jefe">Jefe</option><option value="admin">Admin</option></select>
-                <input required placeholder="Contraseña (mín 6)" value={formUsuario.password} onChange={e=>setFormUsuario({...formUsuario, password:e.target.value})} className="bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/>
-                <div className="md:col-span-4"><input required placeholder="Agencias separadas por coma (Ej. Dentsu, Havas)" value={formUsuario.agencias} onChange={e=>setFormUsuario({...formUsuario, agencias:e.target.value})} className="w-full bg-white text-gray-900 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"/></div>
-                <div className="md:col-span-4 text-right"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700">Crear Usuario</button></div>
+                <input required type="email" placeholder="Correo (@taptapdigital.com)" value={formUsuario.email} onChange={e=>setFormUsuario({...formUsuario, email:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <input required placeholder="Nombre Completo" value={formUsuario.nombre} onChange={e=>setFormUsuario({...formUsuario, nombre:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <select value={formUsuario.rol} onChange={e=>setFormUsuario({...formUsuario, rol:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
+                  <option value="comercial">Comercial</option>
+                  <option value="jefe">Jefe</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <input required placeholder="Contraseña (mín 6)" value={formUsuario.password} onChange={e=>setFormUsuario({...formUsuario, password:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
+                <div className="md:col-span-4"><input required placeholder="Agencias separadas por coma (Ej. Dentsu, Havas)" value={formUsuario.agencias} onChange={e=>setFormUsuario({...formUsuario, agencias:e.target.value})} className="w-full bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/></div>
+                <div className="md:col-span-4 text-right"><button type="submit" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-sm">Crear Usuario</button></div>
               </form>
             </div>
             {solicitudesGlobales.length > 0 && (
-              <div className="bg-yellow-50 p-4 rounded shadow border border-yellow-200"><h3 className="font-bold text-yellow-800 mb-2">Solicitudes Pendientes</h3>
-                {solicitudesGlobales.map(s => <div key={s.id} className="flex justify-between border-b border-yellow-200 py-2 items-center gap-2"><span>{s.email}</span><button onClick={()=>handleAprobarSolicitud(s)} className="text-white bg-green-600 px-3 py-1 rounded font-medium hover:bg-green-700 text-sm whitespace-nowrap">Aprobar</button></div>)}
+              <div className="bg-yellow-50 p-6 rounded-xl shadow-sm border border-yellow-200"><h3 className="font-bold text-yellow-900 mb-4 text-lg">Solicitudes Pendientes</h3>
+                {solicitudesGlobales.map(s => <div key={s.id} className="flex justify-between border-b border-yellow-200 py-3 items-center gap-2"><span className="font-bold text-yellow-900">{s.email}</span><button onClick={()=>handleAprobarSolicitud(s)} className="text-white bg-green-600 px-4 py-2 rounded-lg font-bold hover:bg-green-700 text-sm whitespace-nowrap shadow-sm">Aprobar</button></div>)}
               </div>
             )}
-            <div className="bg-white p-4 rounded shadow overflow-x-auto"><h3 className="font-bold mb-4 text-lg">Directorio</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-gray-700 uppercase"><tr><th className="p-2 text-left">Nombre</th><th className="p-2 text-left">Correo</th><th className="p-2 text-left">Contraseña</th><th className="p-2 text-left">Agencias</th><th className="p-2 text-left">Rol</th><th className="p-2 text-center">Borrar</th></tr></thead>
-              <tbody>{usuariosGlobales.map(u=><tr key={u.email} className="border-b"><td className="p-2 font-medium text-gray-900">{u.nombre}</td><td className="p-2 text-gray-600">{u.email}</td><td className="p-2 font-mono text-xs text-gray-500">{u.password}</td><td className="p-2 text-xs text-gray-500 max-w-xs truncate" title={u.agencias?.join(', ')}>{u.agencias?.join(', ')}</td><td className="p-2"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.rol === 'admin' ? 'bg-purple-100 text-purple-800' : u.rol === 'jefe' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{u.rol.toUpperCase()}</span></td><td className="p-2 text-center"><button onClick={async()=>window.confirm(`¿Seguro que quieres borrar a ${u.nombre}?`) && await deleteDoc(doc(db,'usuarios',u.email))} className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"><Trash2 size={16}/></button></td></tr>)}</tbody></table>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Directorio</h3>
+              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Nombre</th><th className="p-3 text-left border-b border-gray-200">Correo</th><th className="p-3 text-left border-b border-gray-200">Contraseña</th><th className="p-3 text-left border-b border-gray-200">Agencias</th><th className="p-3 text-left border-b border-gray-200">Rol</th><th className="p-3 text-center border-b border-gray-200">Borrar</th></tr></thead>
+              <tbody>{usuariosGlobales.map(u=><tr key={u.email} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-bold text-slate-900">{u.nombre}</td><td className="p-3 font-medium text-slate-700">{u.email}</td><td className="p-3 font-mono text-xs font-bold text-slate-600">{u.password}</td><td className="p-3 text-xs font-medium text-slate-700 max-w-xs truncate" title={u.agencias?.join(', ')}>{u.agencias?.join(', ')}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${u.rol === 'admin' ? 'bg-purple-100 text-purple-900' : u.rol === 'jefe' ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-900'}`}>{u.rol.toUpperCase()}</span></td><td className="p-3 text-center"><button onClick={async()=>window.confirm(`¿Seguro que quieres borrar a ${u.nombre}?`) && await deleteDoc(doc(db,'usuarios',u.email))} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition-colors"><Trash2 size={16}/></button></td></tr>)}</tbody></table>
             </div>
           </div>
         )}
