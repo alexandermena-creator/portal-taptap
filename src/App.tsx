@@ -109,7 +109,6 @@ export default function App() {
   const semanasDisponibles = useMemo(() => [...new Set([...misPropuestas.map(p => p.semana), ...misCitas.map(c => c.semana)])].filter(Boolean), [misPropuestas, misCitas]);
   const vendedoresDisponibles = useMemo(() => ['jefe', 'admin'].includes(perfil) ? [...new Set([...propuestasGlobales.map(p => p.vendedor), ...citasGlobales.map(c => c.vendedor)])].filter(Boolean) : [], [propuestasGlobales, citasGlobales, perfil]);
   
-  // Extraer las agencias dinámicamente
   const currentUserData = useMemo(() => usuariosGlobales.find(u => u.email === currentEmail), [usuariosGlobales, currentEmail]);
   const agenciasDelUsuario = useMemo(() => currentUserData?.agencias || [], [currentUserData]);
   const todasLasAgencias = useMemo(() => [...new Set(usuariosGlobales.flatMap(u => u.agencias || []))], [usuariosGlobales]);
@@ -217,7 +216,9 @@ export default function App() {
   if (!perfil) return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border-t-4 border-blue-600 text-center">
-        <Lock size={32} className="mx-auto text-blue-600 mb-4" />
+        {/* AQUÍ VA TU LOGO EN LA PANTALLA DE LOGIN */}
+        <img src="/logo.png" alt="TapTap Logo" className="mx-auto h-16 mb-6 object-contain" />
+        
         <h1 className="text-2xl font-bold mb-2">Portal Comercial</h1>
         <p className="text-gray-500 mb-6 text-sm">Ingresa con tu correo de TapTap Digital.</p>
         <form onSubmit={handleLogin} className="space-y-4 text-left">
@@ -236,7 +237,11 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-slate-900 text-white p-4 flex flex-col justify-between">
         <div>
-          <h1 className="text-xl font-bold text-blue-400 mb-2">TapTap Comercial</h1>
+          {/* AQUÍ VA TU LOGO EN EL MENÚ LATERAL OSCURO (CON FONDO BLANCO) */}
+          <div className="bg-white rounded-lg p-4 mb-4 flex justify-center shadow-sm">
+            <img src="/logo.png" alt="TapTap Logo" className="h-8 object-contain" />
+          </div>
+
           <div className="bg-slate-800 p-2 rounded text-xs mb-6 text-center">{perfil.toUpperCase()}: {nombreUsuario}</div>
           <nav className="flex flex-col gap-2">
             <button onClick={()=>setActiveTab('dashboard')} className={`p-3 rounded flex gap-3 ${activeTab==='dashboard'?'bg-blue-600':'hover:bg-slate-800'}`}><BarChart3 size={20}/>Dashboard</button>
