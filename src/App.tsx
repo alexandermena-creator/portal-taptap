@@ -165,6 +165,10 @@ export default function App() {
   const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
   const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
 
+  // Estado para la pestaña Mi Perfil
+  const [nuevaContra, setNuevaContra] = useState('');
+  const [mensajePerfil, setMensajePerfil] = useState({ tipo: '', texto: '' });
+
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -298,6 +302,24 @@ export default function App() {
     }
   };
 
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (nuevaContra.length < 6) {
+      setMensajePerfil({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', currentUser.id), { pass: nuevaContra });
+      setMensajePerfil({ tipo: 'exito', texto: '¡Contraseña actualizada correctamente!' });
+      setCurrentUser({...currentUser, pass: nuevaContra});
+      setNuevaContra('');
+      setTimeout(() => setMensajePerfil({ tipo: '', texto: '' }), 3000);
+    } catch (err) {
+      console.error("Error al actualizar contraseña:", err);
+      setMensajePerfil({ tipo: 'error', texto: 'Hubo un error al actualizar la contraseña.' });
+    }
+  };
+
   const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const propuestasFiltradas = useMemo(() => {
@@ -335,7 +357,6 @@ export default function App() {
   const stats = useMemo(() => {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
     
-    // Sólo sumar como WON/CERRADO si el estatus incluye WON o CERRADA explícitamente
     const totalCerrado = propuestasFiltradas.reduce((acc, p) => {
         const status = String(p.estatus || '').toUpperCase();
         if (status.includes('WON') || status === 'CERRADA') {
@@ -344,7 +365,6 @@ export default function App() {
         return acc;
     }, 0);
 
-    // Sumar como COMMITTED
     const totalCommitted = propuestasFiltradas.reduce((acc, p) => {
         const status = String(p.estatus || '').toUpperCase();
         if (status.includes('COMMITTED') || status === 'COMPROMETIDO') {
@@ -470,6 +490,7 @@ export default function App() {
           <SidebarBtn id="dashboard" icon={LayoutDashboard} label="Dashboard" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
+          <SidebarBtn id="perfil" icon={User} label="Mi Perfil" active={activeTab} onClick={setActiveTab} />
           
           {currentUser?.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
@@ -494,10 +515,10 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera Inteligente y Filtros con Flex-Wrap responsivo */}
-        <header className="max-w-6xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="text-left w-full lg:w-auto">
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-2 flex items-center gap-2">
+        {/* Cabecera DOCKED (Sin recuadro blanco) */}
+        <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="text-left w-full md:w-auto">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-1 flex items-center gap-2">
               Hola, {String(currentUser?.nombre || '').split(' ')[0]} <span>👋</span>
             </h2>
             <p className="text-slate-500 text-sm font-medium">
@@ -505,13 +526,13 @@ export default function App() {
             </p>
           </div>
           
-          <div className="w-full lg:w-auto flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+          <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
             
             {/* BOTÓN CALENDARIO DESPLEGABLE */}
             <div className="relative w-full sm:w-auto">
               <button 
                 onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-5 py-3.5 rounded-2xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all font-bold text-sm outline-none"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all font-bold text-sm outline-none"
               >
                 <Calendar size={16} className={filtroFechaInicio || filtroFechaFin ? "text-blue-600" : "text-slate-400"} />
                 {filtroFechaInicio && filtroFechaFin 
@@ -530,11 +551,11 @@ export default function App() {
                   <div className="space-y-4">
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Fecha Inicial</label>
-                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text" value={filtroFechaInicio} onChange={e => setFiltroFechaInicio(e.target.value)} />
+                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text [color-scheme:light]" value={filtroFechaInicio} onChange={e => setFiltroFechaInicio(e.target.value)} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Fecha Final</label>
-                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text" value={filtroFechaFin} onChange={e => setFiltroFechaFin(e.target.value)} />
+                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text [color-scheme:light]" value={filtroFechaFin} onChange={e => setFiltroFechaFin(e.target.value)} />
                     </div>
                     {(filtroFechaInicio || filtroFechaFin) && (
                       <button 
@@ -552,7 +573,7 @@ export default function App() {
             {/* Filtro Vendedor (Solo visible para Admin/Manager) */}
             {isMaster && (
               <select 
-                className="w-full sm:w-auto bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 hover:bg-blue-50 transition-all cursor-pointer appearance-none"
+                className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-5 py-3 text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 hover:bg-blue-50 transition-all cursor-pointer appearance-none"
                 value={filtroVendedor}
                 onChange={e => setFiltroVendedor(e.target.value)}
               >
@@ -571,7 +592,7 @@ export default function App() {
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
             
             {/* GRID INTELIGENTE PARA LOS 5 KPIs (Permite hacer wrap armónico en escritorio y móvil) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
               <KpiCard icon={Target} color="indigo" label="Committed" value={formatCurrency(stats.totalCommitted)} />
               <KpiCard icon={CheckCircle2} color="green" label="Total WON" value={formatCurrency(stats.totalCerrado)} />
@@ -687,6 +708,7 @@ export default function App() {
               </button>
             </div>
             
+            {/* Contenedor de la tabla con Scroll Interno para no alargar la página */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative">
               <div className="max-h-[600px] overflow-auto w-full relative">
                 <table className="w-full text-left min-w-[800px]">
@@ -779,6 +801,75 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB: MI PERFIL */}
+        {activeTab === 'perfil' && (
+          <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Mi Perfil</h2>
+                <p className="text-slate-500 font-medium font-sans mt-1">Gestiona tu información personal y seguridad.</p>
+              </div>
+            </header>
+
+            <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-10 pb-10 border-b border-slate-100">
+                <div className="w-24 h-24 rounded-[2rem] bg-blue-50 text-blue-600 flex items-center justify-center font-black text-4xl shadow-inner border border-blue-100 shrink-0">
+                  {String(currentUser?.nombre || '?').charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-3xl font-black text-slate-900">{String(currentUser?.nombre || '')}</h3>
+                  <p className="text-blue-600 font-bold uppercase tracking-widest text-sm mt-1">{String(currentUser?.cargo || '')}</p>
+                  <span className={`inline-block mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                    currentUser?.role === 'admin' ? 'bg-rose-50 text-rose-700 border-rose-100' : 
+                    currentUser?.role === 'manager' ? 'bg-amber-50 text-amber-700 border-amber-100' : 
+                    'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}>
+                    Nivel de Acceso: {currentUser?.role === 'manager' ? 'Directivo' : String(currentUser?.role || '')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-10">
+                <div>
+                  <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-widest block mb-4 flex items-center gap-2"><Building2 size={14}/> Agencias Asignadas</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {misAgencias.map(a => (
+                      <span key={a} className="bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm">{a}</span>
+                    ))}
+                    {misAgencias.length === 0 && <span className="text-slate-400 italic text-sm">No tienes agencias asignadas.</span>}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-4 italic">* Para agregar o remover agencias, contacta a tu Administrador.</p>
+                </div>
+
+                <div className="pt-10 border-t border-slate-100">
+                  <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-widest block mb-4 flex items-center gap-2"><Lock size={14}/> Actualizar Contraseña</h4>
+                  <form onSubmit={handleUpdatePassword} className="flex flex-col sm:flex-row gap-4 items-start sm:items-stretch">
+                    <div className="w-full sm:w-auto flex-1">
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Escribe tu nueva contraseña (mín. 6 caracteres)" 
+                        value={nuevaContra} 
+                        onChange={e => setNuevaContra(e.target.value)} 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
+                    <button type="submit" className="w-full sm:w-auto bg-slate-900 text-white font-black px-8 py-4 rounded-2xl shadow-lg hover:bg-blue-600 transition-all uppercase tracking-widest text-xs whitespace-nowrap">
+                      Guardar Contraseña
+                    </button>
+                  </form>
+                  {mensajePerfil.texto && (
+                    <div className={`mt-4 p-4 rounded-xl text-sm font-bold animate-in fade-in flex items-center gap-2 ${mensajePerfil.tipo === 'exito' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                      {mensajePerfil.tipo === 'exito' ? <CheckCircle2 size={16}/> : <X size={16}/>}
+                      {mensajePerfil.texto}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -902,7 +993,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1 text-left">
                   <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Día</label>
-                  <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" value={nuevaCita.fechaCruda} onChange={e => {
+                  <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light]" value={nuevaCita.fechaCruda} onChange={e => {
                     const nuevaSemana = obtenerRangoSemana(e.target.value);
                     setNuevaCita({...nuevaCita, fechaCruda: e.target.value, semana: nuevaSemana});
                   }} />
