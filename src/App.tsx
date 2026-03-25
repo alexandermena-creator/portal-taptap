@@ -61,17 +61,34 @@ const parseMonto = (val) => {
   return Number(limpiado) || 0;
 };
 
-// Nueva función: Convierte cualquier fecha en el rango "Lunes al Viernes de Mes"
-const obtenerRangoSemana = (fechaString) => {
-  if (!fechaString) return 'Sin fecha';
-  
-  let d = new Date(fechaString);
-  
-  // Corrige zonas horarias y formatos
-  if (!isNaN(d.getTime()) && fechaString.includes('-')) {
+// Convierte un string de fecha a milisegundos para comparar rangos
+const parseDateStringToTime = (dateStr) => {
+  if (!dateStr) return 0;
+  let d = new Date(dateStr);
+  if (!isNaN(d.getTime()) && String(dateStr).includes('-')) {
      d = new Date(d.getTime() + d.getTimezoneOffset() * 60000); 
   }
+  if (isNaN(d.getTime()) && String(dateStr).includes('/')) {
+      const parts = String(dateStr).split('/');
+      if (parts.length === 3) {
+          const p1 = parseInt(parts[0], 10);
+          const p2 = parseInt(parts[1], 10);
+          const p3 = parseInt(parts[2], 10);
+          if (p3 > 1000) { 
+              d = new Date(p3, p2 - 1, p1); 
+              if (isNaN(d.getTime()) || d.getMonth() !== p2 - 1) {
+                  d = new Date(p3, p1 - 1, p2); 
+              }
+          }
+      }
+  }
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+};
 
+const obtenerRangoSemana = (fechaString) => {
+  if (!fechaString) return 'Sin fecha';
+  let d = new Date(fechaString);
+  if (!isNaN(d.getTime()) && fechaString.includes('-')) d = new Date(d.getTime() + d.getTimezoneOffset() * 60000); 
   if (isNaN(d.getTime())) {
       if(fechaString.includes('/')){
           const [part1, part2, part3] = fechaString.split('/');
@@ -81,7 +98,6 @@ const obtenerRangoSemana = (fechaString) => {
           }
       }
   }
-
   if (isNaN(d.getTime())) return 'Sin fecha';
 
   const diaSemana = d.getDay(); 
@@ -108,7 +124,8 @@ export default function App() {
   
   // Filtros Globales
   const [filtroVendedor, setFiltroVendedor] = useState('Todos');
-  const [filtroSemana, setFiltroSemana] = useState('Todas'); // Nuevo estado para semanas
+  const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
+  const [filtroFechaFin, setFiltroFechaFin] = useState('');
 
   // Modales
   const [showModalCita, setShowModalCita] = useState(false);
@@ -182,7 +199,7 @@ export default function App() {
         return { 
           id: doc.id, 
           ...d,
-          semana: d.semana || obtenerRangoSemana(d.fechaCruda) // Calcula la semana por si no la trae
+          semana: d.semana || obtenerRangoSemana(d.fechaCruda) 
         };
       }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
       setLoading(false);
@@ -190,15 +207,6 @@ export default function App() {
 
     return () => { unsubUsers(); unsubProp(); unsubCitas(); };
   }, [userAuth]);
-
-  // Semanas Disponibles extraídas de los datos reales
-  const semanasDisponibles = useMemo(() => {
-    const semanas = new Set([
-      ...propuestas.map(p => p.semana),
-      ...citas.map(c => c.semana)
-    ].filter(s => s && s !== 'Sin fecha'));
-    return Array.from(semanas);
-  }, [propuestas, citas]);
 
   // Manejo del Login
   const handleLogin = (e) => {
@@ -253,7 +261,7 @@ export default function App() {
     } catch (err) { console.error("Error al guardar cita:", err); }
   };
 
-  // --- LÓGICA DE FILTRADO (Vendedor + Semana) ---
+  // --- LÓGICA DE FILTRADO (Vendedor + Rango de Fechas) ---
   const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const propuestasFiltradas = useMemo(() => {
@@ -261,21 +269,36 @@ export default function App() {
     if (!isMaster) filtradas = filtradas.filter(p => p.vendedor === currentUser?.nombre);
     else if (filtroVendedor !== 'Todos') filtradas = filtradas.filter(p => p.vendedor === filtroVendedor);
     
-    if (filtroSemana !== 'Todas') filtradas = filtradas.filter(p => p.semana === filtroSemana);
+    if (filtroFechaInicio || filtroFechaFin) {
+      const start = filtroFechaInicio ? parseDateStringToTime(filtroFechaInicio) : 0;
+      const end = filtroFechaFin ? parseDateStringToTime(filtroFechaFin) + 86399999 : Infinity; 
+      filtradas = filtradas.filter(p => {
+        const t = parseDateStringToTime(p.fechaCruda);
+        return t >= start && t <= end;
+      });
+    }
     
     return filtradas;
-  }, [propuestas, currentUser, isMaster, filtroVendedor, filtroSemana]);
+  }, [propuestas, currentUser, isMaster, filtroVendedor, filtroFechaInicio, filtroFechaFin]);
 
   const citasFiltradas = useMemo(() => {
     let filtradas = citas;
     if (!isMaster) filtradas = filtradas.filter(c => c.vendedor === currentUser?.nombre);
     else if (filtroVendedor !== 'Todos') filtradas = filtradas.filter(c => c.vendedor === filtroVendedor);
     
-    if (filtroSemana !== 'Todas') filtradas = filtradas.filter(c => c.semana === filtroSemana);
+    if (filtroFechaInicio || filtroFechaFin) {
+      const start = filtroFechaInicio ? parseDateStringToTime(filtroFechaInicio) : 0;
+      const end = filtroFechaFin ? parseDateStringToTime(filtroFechaFin) + 86399999 : Infinity; 
+      filtradas = filtradas.filter(c => {
+        const t = parseDateStringToTime(c.fechaCruda);
+        return t >= start && t <= end;
+      });
+    }
     
     return filtradas;
-  }, [citas, currentUser, isMaster, filtroVendedor, filtroSemana]);
+  }, [citas, currentUser, isMaster, filtroVendedor, filtroFechaInicio, filtroFechaFin]);
 
+  // Recálculo de métricas en base a la información ya filtrada
   const stats = useMemo(() => {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
     const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoCerrado) || 0), 0);
@@ -286,8 +309,8 @@ export default function App() {
 
     const chartData = targetUsers.map(u => ({
       name: String(u.nombre || '').split(' ')[0],
-      propuestas: Number(propuestas.filter(p => p.vendedor === u.nombre && (filtroSemana === 'Todas' || p.semana === filtroSemana)).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
-      citas: Number(citas.filter(c => c.vendedor === u.nombre && (filtroSemana === 'Todas' || c.semana === filtroSemana)).length)
+      propuestas: Number(propuestasFiltradas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
+      citas: Number(citasFiltradas.filter(c => c.vendedor === u.nombre).length)
     }));
 
     return { 
@@ -296,7 +319,7 @@ export default function App() {
       countCitas: citasFiltradas.length, 
       chartData 
     };
-  }, [propuestasFiltradas, citasFiltradas, propuestas, citas, usuarios, filtroVendedor, filtroSemana]);
+  }, [propuestasFiltradas, citasFiltradas, usuarios, filtroVendedor]);
 
   // --- EXPORTAR A CSV SEGURO ---
   const downloadCSV = (data, filename) => {
@@ -323,7 +346,6 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   };
-
 
   // --- VISTA: LOGIN ---
   if (!isLoggedIn || !currentUser) {
@@ -380,7 +402,6 @@ export default function App() {
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
           
-          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' (Alexander) */}
           {currentUser?.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
           )}
@@ -410,22 +431,40 @@ export default function App() {
           </div>
           
           <div className="w-full md:w-auto flex flex-col md:flex-row items-center gap-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest hidden md:inline">Viendo:</span>
             
-            {/* Filtro Semana (Visible para TODOS) */}
-            <select 
-              className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              value={filtroSemana}
-              onChange={e => setFiltroSemana(e.target.value)}
-            >
-              <option value="Todas">📅 Todas las Semanas</option>
-              {semanasDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            {/* RANGO DE FECHAS (Calendario Visible para TODOS) */}
+            <div className="flex items-center w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl p-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+              <Calendar size={16} className="text-slate-400 ml-2 mr-1 hidden md:block" />
+              <input 
+                type="date" 
+                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none cursor-pointer w-full md:w-auto"
+                value={filtroFechaInicio}
+                onChange={e => setFiltroFechaInicio(e.target.value)}
+                title="Fecha de inicio"
+              />
+              <span className="text-slate-300 font-bold mx-1">-</span>
+              <input 
+                type="date" 
+                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none cursor-pointer w-full md:w-auto"
+                value={filtroFechaFin}
+                onChange={e => setFiltroFechaFin(e.target.value)}
+                title="Fecha de fin"
+              />
+              {(filtroFechaInicio || filtroFechaFin) && (
+                <button 
+                  onClick={() => {setFiltroFechaInicio(''); setFiltroFechaFin('');}} 
+                  className="ml-2 p-1 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-700 transition-colors"
+                  title="Limpiar fechas"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
             {/* Filtro Vendedor (Solo visible para Admin/Manager) */}
             {isMaster && (
               <select 
-                className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full md:w-48 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 value={filtroVendedor}
                 onChange={e => setFiltroVendedor(e.target.value)}
               >
@@ -502,7 +541,7 @@ export default function App() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {propuestasFiltradas.length === 0 ? (
-                    <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas en este filtro.</td></tr>
+                    <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas en este rango de fechas.</td></tr>
                   ) : propuestasFiltradas.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition">
                       <td className="p-5">
@@ -540,7 +579,7 @@ export default function App() {
             
             {citasFiltradas.length === 0 ? (
               <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 text-center shadow-sm">
-                <p className="text-slate-400 font-bold">No hay citas agendadas para el filtro actual.</p>
+                <p className="text-slate-400 font-bold">No hay citas agendadas en este rango de fechas.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
