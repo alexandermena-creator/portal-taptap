@@ -7,10 +7,10 @@ import {
 } from 'recharts';
 import { 
   LayoutDashboard, FileText, Calendar, Users, Plus, TrendingUp, 
-  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2
+  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Download
 } from 'lucide-react';
 
-// --- 1. CONFIGURACIÓN REAL DE FIREBASE (Para tu entorno local) ---
+// --- 1. CONFIGURACIÓN REAL DE FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyD92CDTTcEh_BJ53q8q0TXtFtO0Fj29u2w",
   authDomain: "gestion-comercial-taptap.firebaseapp.com",
@@ -23,7 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "1"; // El ID de la carpeta donde Make.com guarda los datos
+const appId = "1"; // El ID de la carpeta de artifacts
 
 // --- 2. TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
 const mapManagerToVendedor = (vendedorRaw) => {
@@ -51,7 +51,9 @@ export default function App() {
   const [propuestas, setPropuestas] = useState([]);
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('team');
+  
+  // Filtro Global para Admins y Managers
+  const [filtroVendedor, setFiltroVendedor] = useState('Todos');
 
   // Modales
   const [showModalCita, setShowModalCita] = useState(false);
@@ -68,7 +70,7 @@ export default function App() {
   const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
   const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
 
-  // 1. Inicialización de Autenticación (Modificado para local)
+  // 1. Inicialización de Autenticación
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -88,14 +90,14 @@ export default function App() {
 
     const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), (snap) => {
       if (snap.empty) {
-        // SEMILLA MAESTRA DEL EQUIPO
+        // SEMILLA MAESTRA DEL EQUIPO (Nuevos roles)
         const equipoInicial = [
           { nombre: "Alexander Mena", pass: "alex2026", role: "admin", cargo: "Admin & Comercial", agencias: "Dentsu, Havas, Mid Market" },
           { nombre: "Berenisse López", pass: "bere2026", role: "comercial", cargo: "Comercial", agencias: "Publicis, WPP, Mid Market" },
           { nombre: "David Vanegas", pass: "david2026", role: "comercial", cargo: "Comercial", agencias: "OMG, IPG, Mid Market" },
-          { nombre: "Alberto Bautista", pass: "alberto2026", role: "admin", cargo: "VP Revenue México", agencias: "Estrategia Nacional" },
-          { nombre: "Javier Ormazabal", pass: "javiorma2026", role: "comercial", cargo: "SVP REVENUE LATAM", agencias: "Cuentas Regionales" },
-          { nombre: "Javier Velazquez", pass: "javiv2026", role: "comercial", cargo: "SVP GLOBAL BUSINESS SOLUTIONS", agencias: "Global Partners" }
+          { nombre: "Alberto Bautista", pass: "alberto2026", role: "manager", cargo: "VP Revenue México", agencias: "Estrategia Nacional" },
+          { nombre: "Javier Ormazabal", pass: "javiorma2026", role: "manager", cargo: "SVP REVENUE LATAM", agencias: "Cuentas Regionales" },
+          { nombre: "Javier Velazquez", pass: "javiv2026", role: "manager", cargo: "SVP GLOBAL BUSINESS SOLUTIONS", agencias: "Global Partners" }
         ];
         equipoInicial.forEach(u => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), u));
       }
@@ -123,6 +125,7 @@ export default function App() {
     return () => { unsubUsers(); unsubProp(); unsubCitas(); };
   }, [userAuth]);
 
+  // Manejo del Login
   const handleLogin = (e) => {
     e.preventDefault();
     const found = usuarios.find(u => u.nombre === loginForm.user && u.pass === loginForm.pass);
@@ -130,11 +133,18 @@ export default function App() {
       setCurrentUser(found);
       setIsLoggedIn(true);
       setLoginError('');
+      // Si no es master, forzamos su filtro a sí mismo
+      if (found.role === 'comercial') {
+        setFiltroVendedor(found.nombre);
+      } else {
+        setFiltroVendedor('Todos');
+      }
     } else {
       setLoginError('Usuario o contraseña incorrectos');
     }
   };
 
+  // Guardar Usuarios (Control Maestro)
   const saveUser = async (e) => {
     e.preventDefault();
     try {
@@ -160,7 +170,7 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), {
         ...nuevaCita,
-        vendedor: currentUser.nombre,
+        vendedor: currentUser.nombre, // Solo registra a su propio nombre
         createdAt: Date.now()
       });
       setShowModalCita(false);
@@ -168,14 +178,31 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
-  const stats = useMemo(() => {
-    const isMaster = currentUser?.role === 'admin' && viewMode === 'team';
-    const dataFiltrada = isMaster ? propuestas : propuestas.filter(p => p.vendedor === currentUser.nombre);
+  // --- LÓGICA DE FILTRADO Y ROLES ---
+  const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
-    const totalEnviado = dataFiltrada.reduce((acc, p) => acc + p.montoEnviado, 0);
-    const totalCerrado = dataFiltrada.reduce((acc, p) => acc + p.montoCerrado, 0);
+  const propuestasFiltradas = useMemo(() => {
+    if (!isMaster) return propuestas.filter(p => p.vendedor === currentUser.nombre);
+    if (filtroVendedor === 'Todos') return propuestas;
+    return propuestas.filter(p => p.vendedor === filtroVendedor);
+  }, [propuestas, currentUser, isMaster, filtroVendedor]);
+
+  const citasFiltradas = useMemo(() => {
+    if (!isMaster) return citas.filter(c => c.vendedor === currentUser.nombre);
+    if (filtroVendedor === 'Todos') return citas;
+    return citas.filter(c => c.vendedor === filtroVendedor);
+  }, [citas, currentUser, isMaster, filtroVendedor]);
+
+  const stats = useMemo(() => {
+    const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + p.montoEnviado, 0);
+    const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + p.montoCerrado, 0);
     
-    const chartData = usuarios.map(u => ({
+    // Gráfica: Si filtró por "Todos", muestra a todo el equipo, sino, solo a la persona seleccionada
+    const targetUsers = filtroVendedor === 'Todos' 
+      ? usuarios.filter(u => u.role === 'comercial' || u.nombre === "Alexander Mena") // Mostramos a los que venden
+      : usuarios.filter(u => u.nombre === filtroVendedor);
+
+    const chartData = targetUsers.map(u => ({
       name: u.nombre.split(' ')[0],
       propuestas: propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + p.montoEnviado, 0),
       citas: citas.filter(c => c.vendedor === u.nombre).length
@@ -184,10 +211,39 @@ export default function App() {
     return { 
       totalEnviado, 
       totalCerrado, 
-      countCitas: citas.filter(c => isMaster || c.vendedor === currentUser.nombre).length, 
+      countCitas: citasFiltradas.length, 
       chartData 
     };
-  }, [propuestas, citas, currentUser, usuarios, viewMode]);
+  }, [propuestasFiltradas, citasFiltradas, propuestas, citas, usuarios, filtroVendedor]);
+
+  // --- EXPORTAR A CSV ---
+  const downloadCSV = (data, filename) => {
+    if (!data || data.length === 0) return;
+    
+    // Quitar campos internos de base de datos
+    const headers = Object.keys(data[0]).filter(k => !['id', 'createdAt'].includes(k));
+    const csvRows = [headers.join(',')];
+    
+    for (const row of data) {
+      const values = headers.map(header => {
+        const val = row[header];
+        // Escapar comillas para evitar que se rompa el CSV
+        const escaped = String(val || '').replace(/"/g, '""');
+        return `"${escaped}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   // --- VISTA: LOGIN ---
   if (!isLoggedIn) {
@@ -244,20 +300,22 @@ export default function App() {
           <SidebarBtn id="dashboard" icon={LayoutDashboard} label="Dashboard" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
+          
+          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' (Alexander) */}
           {currentUser.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
           )}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-800 space-y-4">
-          <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-2xl">
+          <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
             <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-black text-xs">{currentUser.nombre.charAt(0)}</div>
             <div className="overflow-hidden">
               <p className="text-xs font-bold truncate leading-none mb-1">{currentUser.nombre}</p>
               <p className="text-[8px] text-blue-400 font-black uppercase tracking-widest truncate">{currentUser.cargo}</p>
             </div>
           </div>
-          <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 text-xs font-black text-rose-400 hover:text-rose-300 transition-colors">
+          <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 text-xs font-black text-rose-400 hover:text-rose-300 transition-colors w-full justify-center p-2 rounded-xl hover:bg-slate-900">
             <LogOut size={14} /> CERRAR SESIÓN
           </button>
         </div>
@@ -265,75 +323,102 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
+        {/* Cabecera Inteligente: Muestra filtros solo si eres admin o manager */}
+        <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+          <div>
+            <h2 className="text-3xl font-black tracking-tight leading-none mb-2">Hola, {currentUser.nombre.split(' ')[0]} 👋</h2>
+            <p className="text-slate-500 text-sm font-medium">Asignación: <span className="text-blue-600 font-bold">{currentUser.agencias}</span></p>
+          </div>
+          
+          {isMaster && (
+            <div className="w-full md:w-auto flex flex-col md:flex-row items-center gap-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Viendo métricas de:</span>
+              <select 
+                className="w-full md:w-64 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                value={filtroVendedor}
+                onChange={e => setFiltroVendedor(e.target.value)}
+              >
+                <option value="Todos">🚀 Todo el Equipo</option>
+                {usuarios.filter(u => u.role === 'comercial' || u.role === 'admin').map(u => (
+                  <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </header>
+
         {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h2 className="text-3xl font-black tracking-tight">Hola, {currentUser.nombre.split(' ')[0]}</h2>
-                <p className="text-slate-500 font-medium">Asignación: <span className="text-blue-600 font-bold">{currentUser.agencias}</span></p>
-              </div>
-              {currentUser.role === 'admin' && (
-                <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-200 flex">
-                  <button onClick={() => setViewMode('team')} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'team' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}>Equipo</button>
-                  <button onClick={() => setViewMode('personal')} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'personal' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}>Mi Pipe</button>
-                </div>
-              )}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
               <KpiCard icon={CheckCircle2} color="green" label="Total Cerrado" value={formatCurrency(stats.totalCerrado)} />
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
 
-            {currentUser.role === 'admin' && viewMode === 'team' && (
+            {/* Gráficas visibles para admin o managers, o para comerciales si el sistema lo requiere (en este caso solo Master ve gráficas del equipo) */}
+            {isMaster && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                   <h3 className="font-bold text-slate-900 mb-6">💰 Revenue por Comercial</h3>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} /><Bar dataKey="propuestas" fill="#3b82f6" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={stats.chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                        <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                        <Bar dataKey="propuestas" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                   <h3 className="font-bold text-slate-900 mb-6">🗓️ Citas Semanales</h3>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} /><Bar dataKey="citas" fill="#f59e0b" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={stats.chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                        <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                        <Bar dataKey="citas" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* TAB: CONTROL MAESTRO */}
-        {activeTab === 'admin' && (
-          <div className="max-w-6xl mx-auto space-y-6">
-            <header className="flex justify-between items-center">
-              <div><h2 className="text-3xl font-black italic tracking-tight text-slate-900 uppercase">Control Maestro</h2><p className="text-slate-500 font-medium font-sans">Gestión de cargos y asignación de agencias.</p></div>
-              <button onClick={() => { setEditingUser(null); setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' }); setShowModalUser(true); }} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={20} /> Nuevo Perfil</button>
-            </header>
+        {/* TAB: PIPE DE DRIVE */}
+        {activeTab === 'pipe' && (
+          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+              <h2 className="text-3xl font-black italic tracking-tight uppercase">Pipe de Drive</h2>
+              <button 
+                onClick={() => downloadCSV(propuestasFiltradas, 'Pipe_Propuestas')}
+                className="bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3 rounded-xl flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all text-sm"
+              >
+                <Download size={16} /> Descargar CSV
+              </button>
+            </div>
+            
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    <th className="p-5">Colaborador / Cargo</th>
-                    <th className="p-5">Asignación</th>
-                    <th className="p-5">Pass</th>
-                    <th className="p-5">Rol</th>
-                    <th className="p-5 text-right">Acciones</th>
-                  </tr>
+                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  <tr><th className="p-5">Fecha</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-right">Monto</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {usuarios.map(u => (
-                    <tr key={u.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-5">
-                        <div className="font-bold text-slate-900">{u.nombre}</div>
-                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{u.cargo}</div>
-                      </td>
-                      <td className="p-5 text-xs text-slate-500 font-medium">{u.agencias}</td>
-                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest">{u.pass}</td>
-                      <td className="p-5"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span></td>
-                      <td className="p-5 text-right space-x-2">
-                        <button onClick={() => { setEditingUser(u); setFormUser(u); setShowModalUser(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit3 size={18}/></button>
-                        <button onClick={() => deleteUser(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18}/></button>
-                      </td>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {propuestasFiltradas.length === 0 ? (
+                    <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas registradas.</td></tr>
+                  ) : propuestasFiltradas.map(p => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition">
+                      <td className="p-5 text-slate-400 font-medium">{p.fechaCruda}</td>
+                      <td className="p-5 font-bold text-slate-800">{p.nombre}</td>
+                      <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{p.vendedor}</span></td>
+                      <td className="p-5 font-black text-slate-900 text-right">{formatCurrency(p.montoEnviado)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -347,45 +432,84 @@ export default function App() {
           <div className="max-w-6xl mx-auto space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <h2 className="text-3xl font-black italic tracking-tight">Agenda Semanal</h2>
-              <button onClick={() => setShowModalCita(true)} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all font-sans">
-                <Plus size={20} /> Registrar Cita
-              </button>
+              <div className="flex gap-3 w-full md:w-auto">
+                <button 
+                  onClick={() => downloadCSV(citasFiltradas, 'Agenda_Citas')}
+                  className="bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 transition-all text-sm w-full md:w-auto"
+                >
+                  <Download size={16} /> CSV
+                </button>
+                <button onClick={() => setShowModalCita(true)} className="bg-blue-600 text-white font-black px-6 py-3 rounded-xl flex items-center justify-center gap-2 shadow-xl hover:scale-105 transition-all font-sans w-full md:w-auto">
+                  <Plus size={20} /> Registrar Cita
+                </button>
+              </div>
             </header>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {citas.filter(c => (currentUser.role === 'admin' && viewMode === 'team') || c.vendedor === currentUser.nombre).map(c => (
-                <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-blue-400 transition-all group">
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="bg-slate-50 p-4 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={24} /></div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{c.semana}</span>
+            
+            {citasFiltradas.length === 0 ? (
+              <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 text-center shadow-sm">
+                <p className="text-slate-400 font-bold">No hay citas agendadas para el filtro actual.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {citasFiltradas.map(c => (
+                  <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-blue-400 transition-all group">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="bg-slate-50 p-4 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={24} /></div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{c.semana}</span>
+                    </div>
+                    <h4 className="text-xl font-black text-slate-900 leading-tight mb-2">{c.agencia}</h4>
+                    <p className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-tighter leading-none">{c.cuenta}</p>
+                    <div className="pt-6 border-t border-slate-50 space-y-4">
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><User size={14} className="text-blue-500" /> {c.vendedor}</div>
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><Calendar size={14} className="text-slate-400" /> {c.fechaCruda}</div>
+                    </div>
                   </div>
-                  <h4 className="text-xl font-black text-slate-900 leading-tight mb-2">{c.agencia}</h4>
-                  <p className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-tighter leading-none">{c.cuenta}</p>
-                  <div className="pt-6 border-t border-slate-50 space-y-4">
-                    <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><User size={14} className="text-blue-500" /> {c.vendedor}</div>
-                    <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><Calendar size={14} className="text-slate-400" /> {c.fechaCruda}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB: PIPE DE DRIVE */}
-        {activeTab === 'pipe' && (
-          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
-            <h2 className="text-3xl font-black italic tracking-tight uppercase">Pipe de Drive</h2>
+        {/* TAB: CONTROL MAESTRO (Solo Admin) */}
+        {activeTab === 'admin' && currentUser.role === 'admin' && (
+          <div className="max-w-6xl mx-auto space-y-6">
+            <header className="flex justify-between items-center">
+              <div><h2 className="text-3xl font-black italic tracking-tight text-slate-900 uppercase">Control Maestro</h2><p className="text-slate-500 font-medium font-sans">Gestión de cargos, roles y accesos.</p></div>
+              <button onClick={() => { setEditingUser(null); setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' }); setShowModalUser(true); }} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={20} /> Nuevo Perfil</button>
+            </header>
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  <tr><th className="p-5">Fecha</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-right">Monto</th></tr>
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                    <th className="p-5">Colaborador / Cargo</th>
+                    <th className="p-5">Asignación</th>
+                    <th className="p-5">Pass</th>
+                    <th className="p-5">Rol / Nivel</th>
+                    <th className="p-5 text-right">Acciones</th>
+                  </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {propuestas.filter(p => (currentUser.role === 'admin' && viewMode === 'team') || p.vendedor === currentUser.nombre).map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-5 text-slate-400 font-medium">{p.fechaCruda}</td>
-                      <td className="p-5 font-bold text-slate-800">{p.nombre}</td>
-                      <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{p.vendedor}</span></td>
-                      <td className="p-5 font-black text-slate-900 text-right">{formatCurrency(p.montoEnviado)}</td>
+                <tbody className="divide-y divide-slate-100">
+                  {usuarios.map(u => (
+                    <tr key={u.id} className="hover:bg-slate-50/50 transition">
+                      <td className="p-5">
+                        <div className="font-bold text-slate-900">{u.nombre}</div>
+                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{u.cargo}</div>
+                      </td>
+                      <td className="p-5 text-xs text-slate-500 font-medium">{u.agencias}</td>
+                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest">{u.pass}</td>
+                      <td className="p-5">
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                          u.role === 'admin' ? 'bg-rose-100 text-rose-600' : 
+                          u.role === 'manager' ? 'bg-amber-100 text-amber-600' : 
+                          'bg-blue-100 text-blue-600'
+                        }`}>
+                          {u.role === 'manager' ? 'Directivo' : u.role}
+                        </span>
+                      </td>
+                      <td className="p-5 text-right space-x-2">
+                        <button onClick={() => { setEditingUser(u); setFormUser(u); setShowModalUser(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit3 size={18}/></button>
+                        <button onClick={() => deleteUser(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18}/></button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -408,8 +532,15 @@ export default function App() {
               <InputGroup label="Cargo Oficial" value={formUser.cargo} onChange={v => setFormUser({...formUser, cargo: v})} placeholder="Ej. VP Revenue México" />
               <InputGroup label="Agencias Asignadas" value={formUser.agencias} onChange={v => setFormUser({...formUser, agencias: v})} placeholder="Ej. Publicis, WPP..." />
               <InputGroup label="Contraseña" value={formUser.pass} onChange={v => setFormUser({...formUser, pass: v})} />
-              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Nivel Acceso</label><select className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={formUser.role} onChange={e => setFormUser({...formUser, role: e.target.value})}><option value="comercial">Comercial</option><option value="admin">Administrador</option></select></div>
-              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar</button>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Nivel de Acceso (Rol)</label>
+                <select className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={formUser.role} onChange={e => setFormUser({...formUser, role: e.target.value})}>
+                  <option value="comercial">Comercial (Solo ve lo suyo)</option>
+                  <option value="manager">Directivo / Manager (Ve todo el equipo)</option>
+                  <option value="admin">Administrador (Control Total + Usuarios)</option>
+                </select>
+              </div>
+              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar Perfil</button>
             </form>
           </div>
         </div>
@@ -428,7 +559,7 @@ export default function App() {
                 <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Semana</label><input className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" placeholder="23 al 27 Mar" value={nuevaCita.semana} onChange={e => setNuevaCita({...nuevaCita, semana: e.target.value})} required /></div>
               </div>
               <InputGroup label="Contacto" value={nuevaCita.persona} onChange={v => setNuevaCita({...nuevaCita, persona: v})} />
-              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar</button>
+              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar en Agenda</button>
             </form>
           </div>
         </div>
