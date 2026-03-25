@@ -55,6 +55,14 @@ const formatCurrency = (val) => {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
 };
 
+const parseMonto = (val) => {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  // Elimina signos de pesos, comas y espacios. Deja solo números y puntos decimales.
+  const limpiado = String(val).replace(/[^0-9.-]+/g, "");
+  return Number(limpiado) || 0;
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null); 
@@ -127,8 +135,8 @@ export default function App() {
           id: doc.id,
           ...d,
           vendedor: mapManagerToVendedor(d.vendedor),
-          montoEnviado: Number(d.montoEnviado) || 0,
-          montoCerrado: Number(d.montoCerrado) || 0
+          montoEnviado: parseMonto(d.montoEnviado),
+          montoCerrado: parseMonto(d.montoCerrado)
         };
       }));
     }, (error) => console.error("Error cargando propuestas:", error));
