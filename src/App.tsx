@@ -34,12 +34,11 @@ try {
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : "1";
 
-// --- 2. TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
+// --- 2. UTILIDADES Y CALCULADORAS ---
 const mapManagerToVendedor = (vendedorRaw) => {
   if (!vendedorRaw) return 'Sin Asignar';
   const name = String(vendedorRaw).toLowerCase();
   
-  // Captura todas las variantes posibles de los nombres en el Drive
   if (name.includes('monse') || name.includes('mont') || name.includes('cortina')) return 'Alexander Mena';
   if (name.includes('estefania') || name.includes('estef') || name.includes('cordoba')) return 'Berenisse López';
   if (name.includes('dania') || name.includes('topete')) return 'David Vanegas';
@@ -58,9 +57,44 @@ const formatCurrency = (val) => {
 const parseMonto = (val) => {
   if (typeof val === 'number') return val;
   if (!val) return 0;
-  // Elimina signos de pesos, comas y espacios. Deja solo números y puntos decimales.
   const limpiado = String(val).replace(/[^0-9.-]+/g, "");
   return Number(limpiado) || 0;
+};
+
+// Nueva función: Convierte cualquier fecha en el rango "Lunes al Viernes de Mes"
+const obtenerRangoSemana = (fechaString) => {
+  if (!fechaString) return 'Sin fecha';
+  
+  let d = new Date(fechaString);
+  
+  // Corrige zonas horarias y formatos
+  if (!isNaN(d.getTime()) && fechaString.includes('-')) {
+     d = new Date(d.getTime() + d.getTimezoneOffset() * 60000); 
+  }
+
+  if (isNaN(d.getTime())) {
+      if(fechaString.includes('/')){
+          const [part1, part2, part3] = fechaString.split('/');
+          if(part3 && part3.length === 4) {
+             d = new Date(part3, part1 - 1, part2); 
+             if (isNaN(d.getTime())) d = new Date(part3, part2 - 1, part1); 
+          }
+      }
+  }
+
+  if (isNaN(d.getTime())) return 'Sin fecha';
+
+  const diaSemana = d.getDay(); 
+  const diferenciaLunes = d.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+  const lunes = new Date(new Date(d).setDate(diferenciaLunes));
+  const viernes = new Date(new Date(lunes).setDate(lunes.getDate() + 4));
+  
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  if (meses[lunes.getMonth()] === meses[viernes.getMonth()]) {
+    return `${lunes.getDate()} al ${viernes.getDate()} de ${meses[lunes.getMonth()]}`;
+  } else {
+    return `${lunes.getDate()} de ${meses[lunes.getMonth()]} al ${viernes.getDate()} de ${meses[viernes.getMonth()]}`;
+  }
 };
 
 export default function App() {
@@ -72,8 +106,9 @@ export default function App() {
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Filtro Global
+  // Filtros Globales
   const [filtroVendedor, setFiltroVendedor] = useState('Todos');
+  const [filtroSemana, setFiltroSemana] = useState('Todas'); // Nuevo estado para semanas
 
   // Modales
   const [showModalCita, setShowModalCita] = useState(false);
@@ -108,13 +143,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Carga de Datos y Semilla del Equipo
+  // Carga de Datos
   useEffect(() => {
     if (!userAuth || !db) return;
 
     const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), (snap) => {
       if (snap.empty) {
-        // SEMILLA MAESTRA DEL EQUIPO
         const equipoInicial = [
           { nombre: "Alexander Mena", pass: "alex2026", role: "admin", cargo: "Admin & Comercial", agencias: "Dentsu, Havas, Mid Market" },
           { nombre: "Berenisse López", pass: "bere2026", role: "comercial", cargo: "Comercial", agencias: "Publicis, WPP, Mid Market" },
@@ -136,18 +170,35 @@ export default function App() {
           ...d,
           vendedor: mapManagerToVendedor(d.vendedor),
           montoEnviado: parseMonto(d.montoEnviado),
-          montoCerrado: parseMonto(d.montoCerrado)
+          montoCerrado: parseMonto(d.montoCerrado),
+          semana: d.semana || obtenerRangoSemana(d.fechaCruda) // Calcula la semana si no la trae Make
         };
       }));
     }, (error) => console.error("Error cargando propuestas:", error));
 
     const unsubCitas = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), (snap) => {
-      setCitas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+      setCitas(snap.docs.map(doc => {
+        const d = doc.data();
+        return { 
+          id: doc.id, 
+          ...d,
+          semana: d.semana || obtenerRangoSemana(d.fechaCruda) // Calcula la semana por si no la trae
+        };
+      }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
       setLoading(false);
     }, (error) => console.error("Error cargando citas:", error));
 
     return () => { unsubUsers(); unsubProp(); unsubCitas(); };
   }, [userAuth]);
+
+  // Semanas Disponibles extraídas de los datos reales
+  const semanasDisponibles = useMemo(() => {
+    const semanas = new Set([
+      ...propuestas.map(p => p.semana),
+      ...citas.map(c => c.semana)
+    ].filter(s => s && s !== 'Sin fecha'));
+    return Array.from(semanas);
+  }, [propuestas, citas]);
 
   // Manejo del Login
   const handleLogin = (e) => {
@@ -167,7 +218,6 @@ export default function App() {
     }
   };
 
-  // Guardar Usuarios (Control Maestro)
   const saveUser = async (e) => {
     e.preventDefault();
     try {
@@ -203,20 +253,28 @@ export default function App() {
     } catch (err) { console.error("Error al guardar cita:", err); }
   };
 
-  // --- LÓGICA DE FILTRADO SEGURO ---
+  // --- LÓGICA DE FILTRADO (Vendedor + Semana) ---
   const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const propuestasFiltradas = useMemo(() => {
-    if (!isMaster) return propuestas.filter(p => p.vendedor === currentUser?.nombre);
-    if (filtroVendedor === 'Todos') return propuestas;
-    return propuestas.filter(p => p.vendedor === filtroVendedor);
-  }, [propuestas, currentUser, isMaster, filtroVendedor]);
+    let filtradas = propuestas;
+    if (!isMaster) filtradas = filtradas.filter(p => p.vendedor === currentUser?.nombre);
+    else if (filtroVendedor !== 'Todos') filtradas = filtradas.filter(p => p.vendedor === filtroVendedor);
+    
+    if (filtroSemana !== 'Todas') filtradas = filtradas.filter(p => p.semana === filtroSemana);
+    
+    return filtradas;
+  }, [propuestas, currentUser, isMaster, filtroVendedor, filtroSemana]);
 
   const citasFiltradas = useMemo(() => {
-    if (!isMaster) return citas.filter(c => c.vendedor === currentUser?.nombre);
-    if (filtroVendedor === 'Todos') return citas;
-    return citas.filter(c => c.vendedor === filtroVendedor);
-  }, [citas, currentUser, isMaster, filtroVendedor]);
+    let filtradas = citas;
+    if (!isMaster) filtradas = filtradas.filter(c => c.vendedor === currentUser?.nombre);
+    else if (filtroVendedor !== 'Todos') filtradas = filtradas.filter(c => c.vendedor === filtroVendedor);
+    
+    if (filtroSemana !== 'Todas') filtradas = filtradas.filter(c => c.semana === filtroSemana);
+    
+    return filtradas;
+  }, [citas, currentUser, isMaster, filtroVendedor, filtroSemana]);
 
   const stats = useMemo(() => {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
@@ -228,8 +286,8 @@ export default function App() {
 
     const chartData = targetUsers.map(u => ({
       name: String(u.nombre || '').split(' ')[0],
-      propuestas: Number(propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
-      citas: Number(citas.filter(c => c.vendedor === u.nombre).length)
+      propuestas: Number(propuestas.filter(p => p.vendedor === u.nombre && (filtroSemana === 'Todas' || p.semana === filtroSemana)).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
+      citas: Number(citas.filter(c => c.vendedor === u.nombre && (filtroSemana === 'Todas' || c.semana === filtroSemana)).length)
     }));
 
     return { 
@@ -238,7 +296,7 @@ export default function App() {
       countCitas: citasFiltradas.length, 
       chartData 
     };
-  }, [propuestasFiltradas, citasFiltradas, propuestas, citas, usuarios, filtroVendedor]);
+  }, [propuestasFiltradas, citasFiltradas, propuestas, citas, usuarios, filtroVendedor, filtroSemana]);
 
   // --- EXPORTAR A CSV SEGURO ---
   const downloadCSV = (data, filename) => {
@@ -322,6 +380,7 @@ export default function App() {
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
           
+          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' (Alexander) */}
           {currentUser?.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
           )}
@@ -343,18 +402,30 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera Inteligente */}
+        {/* Cabecera Inteligente y Filtros */}
         <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
           <div>
             <h2 className="text-3xl font-black tracking-tight leading-none mb-2">Hola, {String(currentUser?.nombre || '').split(' ')[0]} 👋</h2>
             <p className="text-slate-500 text-sm font-medium">Asignación: <span className="text-blue-600 font-bold">{String(currentUser?.agencias || '')}</span></p>
           </div>
           
-          {isMaster && (
-            <div className="w-full md:w-auto flex flex-col md:flex-row items-center gap-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Viendo métricas de:</span>
+          <div className="w-full md:w-auto flex flex-col md:flex-row items-center gap-3">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest hidden md:inline">Viendo:</span>
+            
+            {/* Filtro Semana (Visible para TODOS) */}
+            <select 
+              className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              value={filtroSemana}
+              onChange={e => setFiltroSemana(e.target.value)}
+            >
+              <option value="Todas">📅 Todas las Semanas</option>
+              {semanasDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* Filtro Vendedor (Solo visible para Admin/Manager) */}
+            {isMaster && (
               <select 
-                className="w-full md:w-64 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 value={filtroVendedor}
                 onChange={e => setFiltroVendedor(e.target.value)}
               >
@@ -363,8 +434,8 @@ export default function App() {
                   <option key={u.id} value={String(u.nombre || '')}>{String(u.nombre || '')}</option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+          </div>
         </header>
 
         {/* TAB: DASHBOARD */}
@@ -393,7 +464,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-                  <h3 className="font-bold text-slate-900 mb-6">🗓️ Citas Semanales</h3>
+                  <h3 className="font-bold text-slate-900 mb-6">🗓️ Citas Registradas</h3>
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={stats.chartData}>
@@ -427,14 +498,17 @@ export default function App() {
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  <tr><th className="p-5">Fecha</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-right">Monto</th></tr>
+                  <tr><th className="p-5">Fecha / Sem.</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-right">Monto</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {propuestasFiltradas.length === 0 ? (
-                    <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas registradas.</td></tr>
+                    <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas en este filtro.</td></tr>
                   ) : propuestasFiltradas.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-5 text-slate-400 font-medium">{String(p.fechaCruda || '')}</td>
+                      <td className="p-5">
+                         <div className="text-slate-400 font-medium">{String(p.fechaCruda || '')}</div>
+                         <div className="text-[10px] text-slate-400 font-bold uppercase">{String(p.semana || '')}</div>
+                      </td>
                       <td className="p-5 font-bold text-slate-800">{String(p.nombre || '')}</td>
                       <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{String(p.vendedor || '')}</span></td>
                       <td className="p-5 font-black text-slate-900 text-right">{formatCurrency(p.montoEnviado)}</td>
@@ -574,8 +648,11 @@ export default function App() {
               <InputGroup label="Agencia / Partner" value={nuevaCita.agencia} onChange={v => setNuevaCita({...nuevaCita, agencia: v})} />
               <InputGroup label="Marca / Cuenta" value={nuevaCita.cuenta} onChange={v => setNuevaCita({...nuevaCita, cuenta: v})} />
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Día</label><input type="date" required className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={nuevaCita.fechaCruda} onChange={e => setNuevaCita({...nuevaCita, fechaCruda: e.target.value})} /></div>
-                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Semana</label><input className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" placeholder="23 al 27 Mar" value={nuevaCita.semana} onChange={e => setNuevaCita({...nuevaCita, semana: e.target.value})} required /></div>
+                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Día</label><input type="date" required className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={nuevaCita.fechaCruda} onChange={e => {
+                  const nuevaSemana = obtenerRangoSemana(e.target.value);
+                  setNuevaCita({...nuevaCita, fechaCruda: e.target.value, semana: nuevaSemana});
+                }} /></div>
+                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Semana</label><input className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none text-slate-500" placeholder="Ej: 23 al 27 de marzo" value={nuevaCita.semana} readOnly required /></div>
               </div>
               <InputGroup label="Contacto" value={nuevaCita.persona} onChange={v => setNuevaCita({...nuevaCita, persona: v})} />
               <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar en Agenda</button>
