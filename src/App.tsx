@@ -10,7 +10,7 @@ import {
   CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Download
 } from 'lucide-react';
 
-// --- 1. CONFIGURACIÓN DE FIREBASE (Con Protección Anti-Crashes para Vite) ---
+// --- 1. CONFIGURACIÓN DE FIREBASE (Con Protección Anti-Crashes) ---
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
   : {
@@ -22,10 +22,16 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
       appId: "1:1001662665656:web:4391d323fa90e3d10e354d"
     };
 
-// Evita que Firebase intente inicializarse dos veces al guardar el código
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Inicialización segura para evitar "doble init" en Vite
+let app, auth, db;
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error("Error inicializando Firebase:", error);
+}
+
 const appId = typeof __app_id !== 'undefined' ? __app_id : "1";
 
 // --- 2. TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
@@ -38,11 +44,11 @@ const mapManagerToVendedor = (vendedorRaw) => {
   if (name.includes('alberto') || name.includes('bautista')) return 'Alberto Bautista';
   if (name.includes('orma') || name.includes('ormazabal')) return 'Javier Ormazabal';
   if (name.includes('velazquez') || name.includes('velázquez')) return 'Javier Velazquez';
-  return vendedorRaw; 
+  return String(vendedorRaw); 
 };
 
 const formatCurrency = (val) => {
-  const num = parseFloat(val) || 0;
+  const num = Number(val) || 0;
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
 };
 
@@ -55,7 +61,7 @@ export default function App() {
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Filtro Global para Admins y Managers
+  // Filtro Global
   const [filtroVendedor, setFiltroVendedor] = useState('Todos');
 
   // Modales
@@ -93,7 +99,7 @@ export default function App() {
 
   // Carga de Datos y Semilla del Equipo
   useEffect(() => {
-    if (!userAuth) return;
+    if (!userAuth || !db) return;
 
     const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), (snap) => {
       if (snap.empty) {
@@ -106,10 +112,10 @@ export default function App() {
           { nombre: "Javier Ormazabal", pass: "javiorma2026", role: "manager", cargo: "SVP REVENUE LATAM", agencias: "Cuentas Regionales" },
           { nombre: "Javier Velazquez", pass: "javiv2026", role: "manager", cargo: "SVP GLOBAL BUSINESS SOLUTIONS", agencias: "Global Partners" }
         ];
-        equipoInicial.forEach(u => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), u));
+        equipoInicial.forEach(u => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), u).catch(console.error));
       }
       setUsuarios(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => console.error("Error cargando usuarios:", error));
 
     const unsubProp = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'propuestas'), (snap) => {
       setPropuestas(snap.docs.map(doc => {
@@ -118,16 +124,16 @@ export default function App() {
           id: doc.id,
           ...d,
           vendedor: mapManagerToVendedor(d.vendedor),
-          montoEnviado: parseFloat(d.montoEnviado) || 0,
-          montoCerrado: parseFloat(d.montoCerrado) || 0
+          montoEnviado: Number(d.montoEnviado) || 0,
+          montoCerrado: Number(d.montoCerrado) || 0
         };
       }));
-    });
+    }, (error) => console.error("Error cargando propuestas:", error));
 
     const unsubCitas = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), (snap) => {
       setCitas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
       setLoading(false);
-    });
+    }, (error) => console.error("Error cargando citas:", error));
 
     return () => { unsubUsers(); unsubProp(); unsubCitas(); };
   }, [userAuth]);
@@ -162,12 +168,14 @@ export default function App() {
       setShowModalUser(false);
       setEditingUser(null);
       setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Error al guardar usuario:", err); }
   };
 
   const deleteUser = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar este acceso?')) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', id));
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', id));
+      } catch (err) { console.error("Error al eliminar:", err); }
     }
   };
 
@@ -176,41 +184,41 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), {
         ...nuevaCita,
-        vendedor: currentUser.nombre,
+        vendedor: currentUser?.nombre || 'Desconocido',
         createdAt: Date.now()
       });
       setShowModalCita(false);
       setNuevaCita({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Error al guardar cita:", err); }
   };
 
-  // --- LÓGICA DE FILTRADO Y ROLES ---
+  // --- LÓGICA DE FILTRADO SEGURO ---
   const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const propuestasFiltradas = useMemo(() => {
-    if (!isMaster) return propuestas.filter(p => p.vendedor === currentUser.nombre);
+    if (!isMaster) return propuestas.filter(p => p.vendedor === currentUser?.nombre);
     if (filtroVendedor === 'Todos') return propuestas;
     return propuestas.filter(p => p.vendedor === filtroVendedor);
   }, [propuestas, currentUser, isMaster, filtroVendedor]);
 
   const citasFiltradas = useMemo(() => {
-    if (!isMaster) return citas.filter(c => c.vendedor === currentUser.nombre);
+    if (!isMaster) return citas.filter(c => c.vendedor === currentUser?.nombre);
     if (filtroVendedor === 'Todos') return citas;
     return citas.filter(c => c.vendedor === filtroVendedor);
   }, [citas, currentUser, isMaster, filtroVendedor]);
 
   const stats = useMemo(() => {
-    const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + p.montoEnviado, 0);
-    const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + p.montoCerrado, 0);
+    const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
+    const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoCerrado) || 0), 0);
     
     const targetUsers = filtroVendedor === 'Todos' 
       ? usuarios.filter(u => u.role === 'comercial' || u.nombre === "Alexander Mena")
       : usuarios.filter(u => u.nombre === filtroVendedor);
 
     const chartData = targetUsers.map(u => ({
-      name: u.nombre.split(' ')[0],
-      propuestas: propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + p.montoEnviado, 0),
-      citas: citas.filter(c => c.vendedor === u.nombre).length
+      name: String(u.nombre || '').split(' ')[0],
+      propuestas: Number(propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
+      citas: Number(citas.filter(c => c.vendedor === u.nombre).length)
     }));
 
     return { 
@@ -221,7 +229,7 @@ export default function App() {
     };
   }, [propuestasFiltradas, citasFiltradas, propuestas, citas, usuarios, filtroVendedor]);
 
-  // --- EXPORTAR A CSV ---
+  // --- EXPORTAR A CSV SEGURO ---
   const downloadCSV = (data, filename) => {
     if (!data || data.length === 0) return;
     
@@ -248,13 +256,15 @@ export default function App() {
   };
 
 
-  // --- VISTA: LOGIN ---
-  if (!isLoggedIn) {
+  // --- VISTA: LOGIN (CON PROTECCIÓN CONTRA RENDER NULL) ---
+  if (!isLoggedIn || !currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans text-center">
         <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 animate-in zoom-in duration-300">
           <div>
-            <img src="https://taptapdigital.com/wp-content/uploads/2021/04/logo_taptap.png" alt="TapTap Logo" className="h-10 mx-auto mb-6" />
+            {/* LOGO DE TAPTAP EN LA CARPETA PUBLIC */}
+            <img src="/logo.png" alt="TapTap Logo" className="h-12 mx-auto mb-6 object-contain" />
+            
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Portal Comercial</h1>
             <p className="text-slate-400 font-medium">Equipo de Ingresos TapTap</p>
           </div>
@@ -264,7 +274,7 @@ export default function App() {
               <select className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
                       value={loginForm.user} onChange={e => setLoginForm({...loginForm, user: e.target.value})} required>
                 <option value="">Selecciona tu perfil...</option>
-                {[...usuarios].sort((a,b) => a.nombre.localeCompare(b.nombre)).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
+                {[...usuarios].sort((a,b) => String(a.nombre || '').localeCompare(String(b.nombre || ''))).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
               </select>
             </div>
             <div className="space-y-2 text-left">
@@ -295,8 +305,8 @@ export default function App() {
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-slate-950 text-white p-6 flex flex-col shrink-0">
         <div className="flex items-center gap-3 mb-10">
-          <div className="bg-blue-600 p-2 rounded-xl"><TrendingUp size={20} /></div>
-          <h1 className="text-xl font-bold tracking-tight italic">TapTap <span className="text-blue-500">Hub</span></h1>
+          {/* LOGO DE TAPTAP EN LA CARPETA PUBLIC PARA EL SIDEBAR */}
+          <img src="/logo.png" alt="TapTap" className="h-8 md:h-10 object-contain invert brightness-0" style={{ filter: 'brightness(0) invert(1)' }} />
         </div>
 
         <nav className="space-y-2 flex-1">
@@ -304,21 +314,21 @@ export default function App() {
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
           
-          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' (Alexander) */}
-          {currentUser.role === 'admin' && (
+          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' */}
+          {currentUser?.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
           )}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-800 space-y-4">
           <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-black text-xs">{currentUser.nombre.charAt(0)}</div>
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-black text-xs">{String(currentUser?.nombre || '?').charAt(0)}</div>
             <div className="overflow-hidden">
-              <p className="text-xs font-bold truncate leading-none mb-1">{currentUser.nombre}</p>
-              <p className="text-[8px] text-blue-400 font-black uppercase tracking-widest truncate">{currentUser.cargo}</p>
+              <p className="text-xs font-bold truncate leading-none mb-1">{String(currentUser?.nombre || '')}</p>
+              <p className="text-[8px] text-blue-400 font-black uppercase tracking-widest truncate">{String(currentUser?.cargo || '')}</p>
             </div>
           </div>
-          <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 text-xs font-black text-rose-400 hover:text-rose-300 transition-colors w-full justify-center p-2 rounded-xl hover:bg-slate-900">
+          <button onClick={() => { setIsLoggedIn(false); setCurrentUser(null); }} className="flex items-center gap-2 text-xs font-black text-rose-400 hover:text-rose-300 transition-colors w-full justify-center p-2 rounded-xl hover:bg-slate-900">
             <LogOut size={14} /> CERRAR SESIÓN
           </button>
         </div>
@@ -326,11 +336,11 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera Inteligente: Muestra filtros solo si eres admin o manager */}
+        {/* Cabecera Inteligente */}
         <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
           <div>
-            <h2 className="text-3xl font-black tracking-tight leading-none mb-2">Hola, {currentUser.nombre.split(' ')[0]} 👋</h2>
-            <p className="text-slate-500 text-sm font-medium">Asignación: <span className="text-blue-600 font-bold">{currentUser.agencias}</span></p>
+            <h2 className="text-3xl font-black tracking-tight leading-none mb-2">Hola, {String(currentUser?.nombre || '').split(' ')[0]} 👋</h2>
+            <p className="text-slate-500 text-sm font-medium">Asignación: <span className="text-blue-600 font-bold">{String(currentUser?.agencias || '')}</span></p>
           </div>
           
           {isMaster && (
@@ -343,7 +353,7 @@ export default function App() {
               >
                 <option value="Todos">🚀 Todo el Equipo</option>
                 {usuarios.filter(u => u.role === 'comercial' || u.role === 'admin').map(u => (
-                  <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                  <option key={u.id} value={String(u.nombre || '')}>{String(u.nombre || '')}</option>
                 ))}
               </select>
             </div>
@@ -417,9 +427,9 @@ export default function App() {
                     <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-bold">No hay propuestas registradas.</td></tr>
                   ) : propuestasFiltradas.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-5 text-slate-400 font-medium">{p.fechaCruda}</td>
-                      <td className="p-5 font-bold text-slate-800">{p.nombre}</td>
-                      <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{p.vendedor}</span></td>
+                      <td className="p-5 text-slate-400 font-medium">{String(p.fechaCruda || '')}</td>
+                      <td className="p-5 font-bold text-slate-800">{String(p.nombre || '')}</td>
+                      <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{String(p.vendedor || '')}</span></td>
                       <td className="p-5 font-black text-slate-900 text-right">{formatCurrency(p.montoEnviado)}</td>
                     </tr>
                   ))}
@@ -457,13 +467,13 @@ export default function App() {
                   <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-blue-400 transition-all group">
                     <div className="flex justify-between items-start mb-6">
                       <div className="bg-slate-50 p-4 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={24} /></div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{c.semana}</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{String(c.semana || '')}</span>
                     </div>
-                    <h4 className="text-xl font-black text-slate-900 leading-tight mb-2">{c.agencia}</h4>
-                    <p className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-tighter leading-none">{c.cuenta}</p>
+                    <h4 className="text-xl font-black text-slate-900 leading-tight mb-2">{String(c.agencia || '')}</h4>
+                    <p className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-tighter leading-none">{String(c.cuenta || '')}</p>
                     <div className="pt-6 border-t border-slate-50 space-y-4">
-                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><User size={14} className="text-blue-500" /> {c.vendedor}</div>
-                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><Calendar size={14} className="text-slate-400" /> {c.fechaCruda}</div>
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><User size={14} className="text-blue-500" /> {String(c.vendedor || '')}</div>
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><Calendar size={14} className="text-slate-400" /> {String(c.fechaCruda || '')}</div>
                     </div>
                   </div>
                 ))}
@@ -473,7 +483,7 @@ export default function App() {
         )}
 
         {/* TAB: CONTROL MAESTRO (Solo Admin) */}
-        {activeTab === 'admin' && currentUser.role === 'admin' && (
+        {activeTab === 'admin' && currentUser?.role === 'admin' && (
           <div className="max-w-6xl mx-auto space-y-6">
             <header className="flex justify-between items-center">
               <div><h2 className="text-3xl font-black italic tracking-tight text-slate-900 uppercase">Control Maestro</h2><p className="text-slate-500 font-medium font-sans">Gestión de cargos, roles y accesos.</p></div>
@@ -494,18 +504,18 @@ export default function App() {
                   {usuarios.map(u => (
                     <tr key={u.id} className="hover:bg-slate-50/50 transition">
                       <td className="p-5">
-                        <div className="font-bold text-slate-900">{u.nombre}</div>
-                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{u.cargo}</div>
+                        <div className="font-bold text-slate-900">{String(u.nombre || '')}</div>
+                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{String(u.cargo || '')}</div>
                       </td>
-                      <td className="p-5 text-xs text-slate-500 font-medium">{u.agencias}</td>
-                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest">{u.pass}</td>
+                      <td className="p-5 text-xs text-slate-500 font-medium">{String(u.agencias || '')}</td>
+                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest">{String(u.pass || '')}</td>
                       <td className="p-5">
                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                           u.role === 'admin' ? 'bg-rose-100 text-rose-600' : 
                           u.role === 'manager' ? 'bg-amber-100 text-amber-600' : 
                           'bg-blue-100 text-blue-600'
                         }`}>
-                          {u.role === 'manager' ? 'Directivo' : u.role}
+                          {u.role === 'manager' ? 'Directivo' : String(u.role || '')}
                         </span>
                       </td>
                       <td className="p-5 text-right space-x-2">
