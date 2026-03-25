@@ -1,376 +1,455 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc, query, getDocs } from 'firebase/firestore';
 import { 
-  BarChart3, Briefcase, Calendar, Users, Edit2, Download, LogOut, Lock, Eye, EyeOff, User, Trash2
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
+} from 'recharts';
+import { 
+  LayoutDashboard, FileText, Calendar, Users, Plus, TrendingUp, 
+  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Briefcase
 } from 'lucide-react';
 
-// --- 1. CONEXIÓN A FIREBASE ---
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyD92CDTTcEh_BJ53q8q0TXtFtO0Fj29u2w",
-  authDomain: "gestion-comercial-taptap.firebaseapp.com",
-  projectId: "gestion-comercial-taptap",
-  storageBucket: "gestion-comercial-taptap.firebasestorage.app",
-  messagingSenderId: "1001662665656",
-  appId: "1:1001662665656:web:4391d323fa90e3d10e354d",
-  measurementId: "G-YN82X8O8ZK"
-};
-
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-// --- 2. DATOS INICIALES ---
-const ESTATUS = ['Enviada', 'Cerrada', 'Perdida'];
+// --- TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
+const mapManagerToVendedor = (vendedorRaw) => {
+  if (!vendedorRaw) return 'Sin Asignar';
+  const name = String(vendedorRaw).toLowerCase();
+  if (name.includes('monserrat') || name.includes('mont') || name.includes('cortina')) return 'Alexander Mena';
+  if (name.includes('estefania') || name.includes('estef') || name.includes('cordoba')) return 'Berenisse López';
+  if (name.includes('dania') || name.includes('topete')) return 'David Vanegas';
+  if (name.includes('alberto') || name.includes('bautista')) return 'Alberto Bautista';
+  if (name.includes('orma') || name.includes('ormazabal')) return 'Javier Ormazabal';
+  if (name.includes('velazquez') || name.includes('velázquez')) return 'Javier Velazquez';
+  return vendedorRaw; 
+};
 
-const USUARIOS_INICIALES = [
-  { email: 'berenisse.lopez@taptapdigital.com', rol: 'comercial', nombre: 'Berenisse López', password: 'TapTap2026', agencias: ['Publicis', 'WPP', 'Mid Market'] },
-  { email: 'david.vanegas@taptapdigital.com', rol: 'comercial', nombre: 'David Vanegas', password: 'TapTap2026', agencias: ['OMG', 'IPG', 'Mid Market'] },
-  { email: 'alberto.bautista@taptapdigital.com', rol: 'jefe', nombre: 'Alberto Bautista', password: 'TapTap2026', agencias: ['Dentsu', 'Havas', 'Publicis', 'WPP', 'OMG', 'IPG', 'Mid Market'] },
-  { email: 'javier.velazquez@taptapdigital.com', rol: 'jefe', nombre: 'Javier Velázquez', password: 'TapTap2026', agencias: ['Dentsu', 'Havas', 'Publicis', 'WPP', 'OMG', 'IPG', 'Mid Market'] },
-  { email: 'javier.ormazabal@taptapdigital.com', rol: 'jefe', nombre: 'Javier Ormazabal', password: 'TapTap2026', agencias: ['Dentsu', 'Havas', 'Publicis', 'WPP', 'OMG', 'IPG', 'Mid Market'] },
-  { email: 'alexander.mena@taptapdigital.com', rol: 'admin', nombre: 'Alexander Mena', password: 'TapTap2026', agencias: ['Dentsu', 'Havas', 'Mid Market'] }
-];
-
-const obtenerRangoSemana = (fechaString) => {
-  if (!fechaString) return '';
-  const [year, month, day] = fechaString.split('-').map(Number);
-  const d = new Date(year, month - 1, day);
-  const diaSemana = d.getDay(); 
-  const diferenciaLunes = d.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
-  const lunes = new Date(new Date(d).setDate(diferenciaLunes));
-  const viernes = new Date(new Date(lunes).setDate(lunes.getDate() + 4));
-  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  if (meses[lunes.getMonth()] === meses[viernes.getMonth()]) {
-    return `${lunes.getDate()} al ${viernes.getDate()} de ${meses[lunes.getMonth()]}`;
-  } else {
-    return `${lunes.getDate()} de ${meses[lunes.getMonth()]} al ${viernes.getDate()} de ${meses[viernes.getMonth()]}`;
-  }
+const formatCurrency = (val) => {
+  const num = parseFloat(val) || 0;
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [perfil, setPerfil] = useState(null); 
-  const [nombreUsuario, setNombreUsuario] = useState('');
-  const [currentEmail, setCurrentEmail] = useState('');
-  
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [mensajeExito, setMensajeExito] = useState('');
-  const [solicitandoAcceso, setSolicitandoAcceso] = useState(false);
-
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null); 
+  const [usuarios, setUsuarios] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [filtroSemana, setFiltroSemana] = useState('Todas');
-  const [filtroVendedor, setFiltroVendedor] = useState('Todos');
+  const [propuestas, setPropuestas] = useState([]);
+  const [citas, setCitas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('team'); // 'team' o 'personal' para Admins
 
-  const [propuestasGlobales, setPropuestasGlobales] = useState([]);
-  const [citasGlobales, setCitasGlobales] = useState([]);
-  const [usuariosGlobales, setUsuariosGlobales] = useState([]);
-  const [solicitudesGlobales, setSolicitudesGlobales] = useState([]);
-
-  const [fechaPropuesta, setFechaPropuesta] = useState('');
-  const [fechaCita, setFechaCita] = useState('');
-  const [formPropuesta, setFormPropuesta] = useState({ semana: '', agencia: '', nombre: '', montoEnviado: '', estatus: 'Enviada', montoCerrado: '' });
-  const [formCita, setFormCita] = useState({ semana: '', agencia: '', persona: '', cuenta: '' });
-  const [editingPropuestaId, setEditingPropuestaId] = useState(null);
+  // Modales
+  const [showModalCita, setShowModalCita] = useState(false);
+  const [showModalUser, setShowModalUser] = useState(false);
   
-  const [formUsuario, setFormUsuario] = useState({ email: '', nombre: '', rol: 'comercial', password: '', agencias: '' });
-  const [nuevaContra, setNuevaContra] = useState('');
+  // Login State
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
+  const [loginError, setLoginError] = useState('');
+  const [userAuth, setUserAuth] = useState(null);
 
+  // Formulario Usuarios
+  const [editingUser, setEditingUser] = useState(null);
+  const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
+
+  // Formulario Citas
+  const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
+
+  // 1. Inicialización de Autenticación
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoadingAuth(false);
-    });
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) { console.error("Error de Auth:", e); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUserAuth);
     return () => unsubscribe();
   }, []);
 
+  // 2. Carga de Datos y Semilla del Equipo Completo
   useEffect(() => {
-    if (!user) return;
-    const unsubPropuestas = onSnapshot(collection(db, 'propuestas'), snapshot => setPropuestasGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.createdAt - a.createdAt)));
-    const unsubCitas = onSnapshot(collection(db, 'citas'), snapshot => setCitasGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.createdAt - a.createdAt)));
-    const unsubUsuarios = onSnapshot(collection(db, 'usuarios'), snapshot => setUsuariosGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-    const unsubSolicitudes = onSnapshot(collection(db, 'solicitudes'), snapshot => setSolicitudesGlobales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-    return () => { unsubPropuestas(); unsubCitas(); unsubUsuarios(); unsubSolicitudes(); };
-  }, [user]);
+    if (!userAuth) return;
 
-  const misPropuestas = useMemo(() => ['jefe', 'admin'].includes(perfil) ? propuestasGlobales : propuestasGlobales.filter(p => p.vendedor === nombreUsuario), [propuestasGlobales, perfil, nombreUsuario]);
-  const misCitas = useMemo(() => ['jefe', 'admin'].includes(perfil) ? citasGlobales : citasGlobales.filter(c => c.vendedor === nombreUsuario), [citasGlobales, perfil, nombreUsuario]);
-  const semanasDisponibles = useMemo(() => [...new Set([...misPropuestas.map(p => p.semana), ...misCitas.map(c => c.semana)])].filter(Boolean), [misPropuestas, misCitas]);
-  const vendedoresDisponibles = useMemo(() => ['jefe', 'admin'].includes(perfil) ? [...new Set([...propuestasGlobales.map(p => p.vendedor), ...citasGlobales.map(c => c.vendedor)])].filter(Boolean) : [], [propuestasGlobales, citasGlobales, perfil]);
-  
-  const currentUserData = useMemo(() => usuariosGlobales.find(u => u.email === currentEmail), [usuariosGlobales, currentEmail]);
-  const agenciasDelUsuario = useMemo(() => currentUserData?.agencias || [], [currentUserData]);
-  const todasLasAgencias = useMemo(() => [...new Set(usuariosGlobales.flatMap(u => u.agencias || []))], [usuariosGlobales]);
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), (snap) => {
+      if (snap.empty) {
+        // SEMILLA MAESTRA DEL EQUIPO
+        const equipoInicial = [
+          { nombre: "Alexander Mena", pass: "alex2026", role: "admin", cargo: "Admin & Comercial", agencias: "Dentsu, Havas, Mid Market" },
+          { nombre: "Berenisse López", pass: "bere2026", role: "comercial", cargo: "Comercial", agencias: "Publicis, WPP, Mid Market" },
+          { nombre: "David Vanegas", pass: "david2026", role: "comercial", cargo: "Comercial", agencias: "OMG, IPG, Mid Market" },
+          { nombre: "Alberto Bautista", pass: "alberto2026", role: "admin", cargo: "VP Revenue México", agencias: "Estrategia Nacional" },
+          { nombre: "Javier Ormazabal", pass: "javiorma2026", role: "comercial", cargo: "SVP REVENUE LATAM", agencias: "Cuentas Regionales" },
+          { nombre: "Javier Velazquez", pass: "javiv2026", role: "comercial", cargo: "SVP GLOBAL BUSINESS SOLUTIONS", agencias: "Global Partners" }
+        ];
+        equipoInicial.forEach(u => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), u));
+      }
+      setUsuarios(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
-  const handleLogin = async (e) => {
+    const unsubProp = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'propuestas'), (snap) => {
+      setPropuestas(snap.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          vendedor: mapManagerToVendedor(d.vendedor),
+          montoEnviado: parseFloat(d.montoEnviado) || 0,
+          montoCerrado: parseFloat(d.montoCerrado) || 0
+        };
+      }));
+    });
+
+    const unsubCitas = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), (snap) => {
+      setCitas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+      setLoading(false);
+    });
+
+    return () => { unsubUsers(); unsubProp(); unsubCitas(); };
+  }, [userAuth]);
+
+  const handleLogin = (e) => {
     e.preventDefault();
-    setLoginError(''); setMensajeExito('');
-    const correoLimpiado = emailInput.trim().toLowerCase();
-    if (!correoLimpiado.endsWith('@taptapdigital.com')) return setLoginError('Solo correos @taptapdigital.com permitidos.');
-
-    if (correoLimpiado === 'alexander.mena@taptapdigital.com' && usuariosGlobales.length === 0) {
-      try {
-        for (const u of USUARIOS_INICIALES) await setDoc(doc(db, 'usuarios', u.email), u);
-        setPerfil('admin'); setNombreUsuario('Alexander Mena'); setCurrentEmail(correoLimpiado);
-        return;
-      } catch (error) { console.error("Error BD:", error); }
-    }
-
-    const usuarioAutorizado = usuariosGlobales.find(u => u.email === correoLimpiado);
-    if (usuarioAutorizado) {
-      if (usuarioAutorizado.password === passwordInput) {
-        setPerfil(usuarioAutorizado.rol); setNombreUsuario(usuarioAutorizado.nombre); setCurrentEmail(correoLimpiado);
-        setSolicitandoAcceso(false); setPasswordInput('');
-      } else { setLoginError('Contraseña incorrecta.'); }
+    const found = usuarios.find(u => u.nombre === loginForm.user && u.pass === loginForm.pass);
+    if (found) {
+      setCurrentUser(found);
+      setIsLoggedIn(true);
+      setLoginError('');
     } else {
-      setLoginError('Correo no registrado.'); setSolicitandoAcceso(true);
+      setLoginError('Usuario o contraseña incorrectos');
     }
   };
 
-  const handleSolicitarAcceso = async () => {
+  const saveUser = async (e) => {
+    e.preventDefault();
     try {
-      if (solicitudesGlobales.some(s => s.email === emailInput.trim().toLowerCase())) return setLoginError('Solicitud ya enviada.');
-      await addDoc(collection(db, 'solicitudes'), { email: emailInput.trim().toLowerCase(), fecha: Date.now() });
-      setMensajeExito('Solicitud enviada.'); setSolicitandoAcceso(false); setLoginError('');
-    } catch (error) { console.error("Error:", error); }
+      if (editingUser) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', editingUser.id), formUser);
+      } else {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), formUser);
+      }
+      setShowModalUser(false);
+      setEditingUser(null);
+      setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
+    } catch (err) { console.error(err); }
   };
 
-  const handleAddUser = async (e) => {
+  const deleteUser = async (id) => {
+    if (window.confirm('¿Estás seguro de eliminar este acceso?')) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usuarios', id));
+    }
+  };
+
+  const guardarCita = async (e) => {
     e.preventDefault();
-    if (formUsuario.password.length < 6) return alert('La contraseña debe tener 6 caracteres');
-    const arregloAgencias = formUsuario.agencias.split(',').map(a => a.trim()).filter(Boolean);
     try {
-      await setDoc(doc(db, 'usuarios', formUsuario.email.trim().toLowerCase()), { ...formUsuario, email: formUsuario.email.trim().toLowerCase(), agencias: arregloAgencias });
-      setFormUsuario({ email: '', nombre: '', rol: 'comercial', password: '', agencias: '' });
-      alert('Usuario guardado con éxito.');
-    } catch (error) { console.error(error); }
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), {
+        ...nuevaCita,
+        vendedor: currentUser.nombre,
+        createdAt: Date.now()
+      });
+      setShowModalCita(false);
+      setNuevaCita({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
+    } catch (err) { console.error(err); }
   };
 
-  const handleAprobarSolicitud = async (solicitud) => {
-    setFormUsuario({ email: solicitud.email, nombre: '', rol: 'comercial', password: '', agencias: '' });
-    await deleteDoc(doc(db, 'solicitudes', solicitud.id));
-    alert("Procesando... Asigna Nombre, Rol, Agencias y Contraseña abajo.");
-  };
+  const stats = useMemo(() => {
+    const isMaster = currentUser?.role === 'admin' && viewMode === 'team';
+    const dataFiltrada = isMaster ? propuestas : propuestas.filter(p => p.vendedor === currentUser.nombre);
 
-  const handleCambiarContra = async (e) => {
-    e.preventDefault();
-    if(nuevaContra.length < 6) return alert('Debe tener al menos 6 caracteres.');
-    try {
-      await updateDoc(doc(db, 'usuarios', currentEmail), { password: nuevaContra });
-      setNuevaContra('');
-      alert('Contraseña actualizada con éxito.');
-    } catch(err) { console.error(err); }
-  };
+    const totalEnviado = dataFiltrada.reduce((acc, p) => acc + p.montoEnviado, 0);
+    const totalCerrado = dataFiltrada.reduce((acc, p) => acc + p.montoCerrado, 0);
+    
+    const chartData = usuarios
+      .map(u => ({
+        name: u.nombre.split(' ')[0],
+        propuestas: propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + p.montoEnviado, 0),
+        citas: citas.filter(c => c.vendedor === u.nombre).length
+      }));
 
-  const handleSubmitPropuesta = async (e) => {
-    e.preventDefault();
-    const data = { ...formPropuesta, fechaCruda: fechaPropuesta, vendedor: nombreUsuario, createdAt: Date.now(), agencia: formPropuesta.agencia || agenciasDelUsuario[0] };
-    if (editingPropuestaId) { await updateDoc(doc(db, 'propuestas', editingPropuestaId), data); setEditingPropuestaId(null); } 
-    else { await addDoc(collection(db, 'propuestas'), data); }
-    setFormPropuesta({ semana: '', agencia: agenciasDelUsuario[0], nombre: '', montoEnviado: '', estatus: 'Enviada', montoCerrado: '' }); setFechaPropuesta('');
-  };
+    return { totalEnviado, totalCerrado, countCitas: citas.filter(c => isMaster || c.vendedor === currentUser.nombre).length, chartData };
+  }, [propuestas, citas, currentUser, usuarios, viewMode]);
 
-  const handleAddCita = async (e) => {
-    e.preventDefault();
-    await addDoc(collection(db, 'citas'), { ...formCita, fechaCruda: fechaCita, vendedor: nombreUsuario, createdAt: Date.now(), agencia: formCita.agencia || agenciasDelUsuario[0] });
-    setFormCita({ semana: '', agencia: agenciasDelUsuario[0], persona: '', cuenta: '' }); setFechaCita('');
-  };
-
-  const handleExportCSV = () => {
-    let csv = "data:text/csv;charset=utf-8,\uFEFF";
-    csv += "--- PROPUESTAS ---\r\n" + (['jefe', 'admin'].includes(perfil) ? "Semana,Fecha,Vendedor,Agencia,Proyecto,Enviado,Estatus,Cerrado\r\n" : "Semana,Fecha,Agencia,Proyecto,Enviado,Estatus,Cerrado\r\n");
-    misPropuestas.filter(p => (filtroSemana === 'Todas' || p.semana === filtroSemana) && (['comercial'].includes(perfil) || filtroVendedor === 'Todos' || p.vendedor === filtroVendedor)).forEach(p => {
-      csv += ['jefe', 'admin'].includes(perfil) ? `"${p.semana}","${p.fechaCruda||''}","${p.vendedor}","${p.agencia}","${p.nombre}",${p.montoEnviado},"${p.estatus}",${p.montoCerrado||0}\r\n` : `"${p.semana}","${p.fechaCruda||''}","${p.agencia}","${p.nombre}",${p.montoEnviado},"${p.estatus}",${p.montoCerrado||0}\r\n`;
-    });
-    csv += "\r\n--- REUNIONES ---\r\n" + (['jefe', 'admin'].includes(perfil) ? "Semana,Fecha,Vendedor,Agencia,Contacto,Cuenta\r\n" : "Semana,Fecha,Agencia,Contacto,Cuenta\r\n");
-    misCitas.filter(c => (filtroSemana === 'Todas' || c.semana === filtroSemana) && (['comercial'].includes(perfil) || filtroVendedor === 'Todos' || c.vendedor === filtroVendedor)).forEach(c => {
-      csv += ['jefe', 'admin'].includes(perfil) ? `"${c.semana}","${c.fechaCruda||''}","${c.vendedor}","${c.agencia}","${c.persona}","${c.cuenta}"\r\n` : `"${c.semana}","${c.fechaCruda||''}","${c.agencia}","${c.persona}","${c.cuenta}"\r\n`;
-    });
-    const link = document.createElement("a"); link.href = encodeURI(csv); link.download = `Reporte_${new Date().toISOString().split('T')[0]}.csv`; link.click();
-  };
-
-  const metricas = useMemo(() => {
-    let p = misPropuestas.filter(x => filtroSemana === 'Todas' || x.semana === filtroSemana);
-    let c = misCitas.filter(x => filtroSemana === 'Todas' || x.semana === filtroSemana);
-    if (['jefe', 'admin'].includes(perfil) && filtroVendedor !== 'Todos') { p = p.filter(x => x.vendedor === filtroVendedor); c = c.filter(x => x.vendedor === filtroVendedor); }
-    const resumen = todasLasAgencias.map(ag => ({ agencia: ag, enviado: p.filter(x=>x.agencia===ag).reduce((s,x)=>s+Number(x.montoEnviado),0), cerrado: p.filter(x=>x.agencia===ag).reduce((s,x)=>s+Number(x.montoCerrado||0),0), citas: c.filter(x=>x.agencia===ag).length })).filter(r => r.enviado > 0 || r.cerrado > 0 || r.citas > 0 || agenciasDelUsuario.includes(r.agencia));
-    const tEnv = resumen.reduce((s,r)=>s+r.enviado,0), tCer = resumen.reduce((s,r)=>s+r.cerrado,0);
-    return { resumen, totalEnviado: tEnv, totalCerrado: tCer, totalCitas: resumen.reduce((s,r)=>s+r.citas,0), tasaBateo: tEnv>0 ? ((tCer/tEnv)*100).toFixed(1) : 0 };
-  }, [misPropuestas, misCitas, filtroSemana, filtroVendedor, perfil, todasLasAgencias, agenciasDelUsuario]);
-
-  const fMoney = m => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(m);
-
-  if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-900 font-medium">Conectando a TapTap...</div>;
-
-  if (!perfil) return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border-t-4 border-blue-600 text-center">
-        {/* LOGO GIGANTE EN EL LOGIN */}
-        <img src="/logo.png" alt="TapTap Logo" className="mx-auto h-24 md:h-32 mb-6 object-contain" />
-        
-        {/* TITULO CON COLOR NEGRO FORZADO */}
-        <h1 className="text-2xl font-bold mb-2 text-slate-900">Portal Comercial</h1>
-        <p className="text-gray-600 mb-6 text-sm">Ingresa con tu correo de TapTap Digital.</p>
-        <form onSubmit={handleLogin} className="space-y-4 text-left">
-          <div><label className="text-sm font-medium text-slate-900">Correo</label><input type="email" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="w-full p-3 bg-white text-slate-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /></div>
-          <div><label className="text-sm font-medium text-slate-900">Contraseña</label><div className="relative"><input type={showPassword?"text":"password"} value={passwordInput} onChange={e=>setPasswordInput(e.target.value)} className="w-full p-3 bg-white text-slate-900 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" /><button type="button" onClick={()=>setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-500 hover:text-slate-900">{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></div>
-          {loginError && <p className="text-red-600 text-sm bg-red-50 p-2 rounded">{loginError}</p>}
-          {mensajeExito && <p className="text-green-600 text-sm bg-green-50 p-2 rounded">{mensajeExito}</p>}
-          <button type="submit" className="w-full py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-colors">Iniciar Sesión</button>
-          {solicitandoAcceso && <button type="button" onClick={handleSolicitarAcceso} className="w-full py-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 font-medium">Solicitar Acceso</button>}
-        </form>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      {/* --- NUEVO DISEÑO DE BARRA LATERAL (TEMA CLARO/BLANCO) --- */}
-      <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 flex flex-col justify-between shadow-sm z-10">
-        <div>
-          {/* LOGO EN EL MENÚ (MÁS GRANDE Y SIN CAJA) */}
-          <div className="mb-8 mt-2 flex justify-center px-2">
-            <img src="/logo.png" alt="TapTap Logo" className="h-12 md:h-16 object-contain" />
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans text-center">
+        <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 animate-in zoom-in duration-300">
+          <div>
+            <img src="https://taptapdigital.com/wp-content/uploads/2021/04/logo_taptap.png" alt="TapTap Logo" className="h-10 mx-auto mb-6" />
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Portal Comercial</h1>
+            <p className="text-slate-400 font-medium">Equipo de Ingresos TapTap</p>
           </div>
-
-          <div className="bg-gray-100 text-slate-800 font-bold p-2 rounded text-xs mb-6 text-center border border-gray-200">
-            {perfil.toUpperCase()}: {nombreUsuario}
-          </div>
-          
-          <nav className="flex flex-col gap-2">
-            <button onClick={()=>setActiveTab('dashboard')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='dashboard'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><BarChart3 size={20}/>Dashboard</button>
-            <button onClick={()=>setActiveTab('propuestas')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='propuestas'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Briefcase size={20}/>Propuestas</button>
-            <button onClick={()=>setActiveTab('citas')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='citas'?'bg-blue-50 text-blue-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Calendar size={20}/>Reuniones</button>
-            {perfil === 'admin' && <button onClick={()=>setActiveTab('usuarios')} className={`p-3 rounded-lg flex gap-3 transition-colors ${activeTab==='usuarios'?'bg-purple-50 text-purple-700 font-bold':'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'}`}><Users size={20}/>Usuarios</button>}
-          </nav>
-        </div>
-        
-        <div className="mt-8 space-y-3 pt-4 border-t border-gray-100">
-          <button onClick={()=>setActiveTab('perfil')} className={`w-full p-2 flex justify-center gap-2 rounded-lg transition-colors ${activeTab==='perfil'?'bg-gray-100 text-slate-900 font-bold':'text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-medium'}`}><User size={16}/>Mi Perfil</button>
-          <button onClick={handleExportCSV} className="w-full p-3 bg-emerald-600 text-white rounded-lg flex justify-center gap-2 hover:bg-emerald-700 font-medium shadow-sm"><Download size={18}/>Descargar CSV</button>
-          <button onClick={()=>{setPerfil(null);setEmailInput('');setPasswordInput('');}} className="w-full p-2 text-red-600 hover:text-red-800 flex justify-center gap-2 hover:bg-red-50 rounded-lg font-medium transition-colors"><LogOut size={16}/>Salir</button>
-        </div>
-      </aside>
-      
-      <main className="flex-1 p-6 overflow-y-auto text-slate-900">
-        {activeTab === 'perfil' && (
-          <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-200 mt-10">
-            <h2 className="text-2xl font-bold mb-6 text-center text-slate-900">Mi Perfil</h2>
-            <div className="space-y-4 mb-8">
-              <div><p className="text-sm text-gray-500 font-medium">Nombre</p><p className="font-bold text-lg text-slate-900">{nombreUsuario}</p></div>
-              <div><p className="text-sm text-gray-500 font-medium">Correo</p><p className="font-bold text-slate-900">{currentEmail}</p></div>
-              <div><p className="text-sm text-gray-500 font-medium">Rol en el sistema</p><p className="font-bold uppercase text-blue-600">{perfil}</p></div>
-              <div><p className="text-sm text-gray-500 font-medium">Tus Agencias Asignadas</p><div className="flex flex-wrap gap-2 mt-1">{agenciasDelUsuario.map(a=><span key={a} className="bg-gray-100 px-3 py-1 rounded-full text-sm font-semibold text-slate-900 border border-gray-200">{a}</span>)}</div></div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Colaborador</label>
+              <select className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                      value={loginForm.user} onChange={e => setLoginForm({...loginForm, user: e.target.value})} required>
+                <option value="">Selecciona tu perfil...</option>
+                {usuarios.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
+              </select>
             </div>
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="font-bold mb-4 text-slate-900">Cambiar mi Contraseña</h3>
-              <form onSubmit={handleCambiarContra} className="flex gap-2">
-                <input required type="text" placeholder="Nueva contraseña" value={nuevaContra} onChange={e=>setNuevaContra(e.target.value)} className="flex-1 bg-white text-slate-900 border border-gray-300 p-2 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800">Actualizar</button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
-              <div className="flex gap-2">
-                {['jefe','admin'].includes(perfil) && <select className="p-2 bg-white text-slate-900 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium" value={filtroVendedor} onChange={e=>setFiltroVendedor(e.target.value)}><option value="Todos">Todos los Vendedores</option>{vendedoresDisponibles.map(v=><option key={v}>{v}</option>)}</select>}
-                <select className="p-2 bg-white text-slate-900 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium" value={filtroSemana} onChange={e=>setFiltroSemana(e.target.value)}><option value="Todas">Todas las Semanas</option>{semanasDisponibles.map(s=><option key={s}>{s}</option>)}</select>
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Contraseña</label>
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all pl-12"
+                       placeholder="••••••••" value={loginForm.pass} onChange={e => setLoginForm({...loginForm, pass: e.target.value})} required />
+                <Lock className="absolute left-4 top-4 text-slate-300" size={20} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-300 hover:text-slate-500">
+                  {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200"><p className="text-sm text-gray-500 font-medium">Enviado</p><p className="text-xl font-bold text-slate-900">{fMoney(metricas.totalEnviado)}</p></div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-green-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Cerrado</p><p className="text-xl font-bold text-green-700">{fMoney(metricas.totalCerrado)}</p></div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-purple-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Citas</p><p className="text-xl font-bold text-purple-700">{metricas.totalCitas}</p></div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border-b-4 border-b-orange-500 border border-gray-200"><p className="text-sm text-gray-500 font-medium">Tasa Cierre</p><p className="text-xl font-bold text-orange-700">{metricas.tasaBateo}%</p></div>
+            {loginError && <div className="p-3 bg-rose-50 text-rose-500 text-xs font-bold rounded-xl">{loginError}</div>}
+            <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3">
+              Entrar al Portal <ChevronRight size={20} />
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans overflow-hidden">
+      
+      {/* Sidebar */}
+      <aside className="w-full md:w-64 bg-slate-950 text-white p-6 flex flex-col shrink-0">
+        <div className="flex items-center gap-3 mb-10">
+          <div className="bg-blue-600 p-2 rounded-xl"><TrendingUp size={20} /></div>
+          <h1 className="text-xl font-bold tracking-tight italic">TapTap <span className="text-blue-500">Hub</span></h1>
+        </div>
+
+        <nav className="space-y-2 flex-1">
+          <SidebarBtn id="dashboard" icon={LayoutDashboard} label="Dashboard" active={activeTab} onClick={setActiveTab} />
+          <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
+          <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
+          {currentUser.role === 'admin' && (
+            <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
+          )}
+        </nav>
+
+        <div className="mt-auto pt-6 border-t border-slate-800 space-y-4">
+          <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-2xl">
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-black text-xs">{currentUser.nombre.charAt(0)}</div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-bold truncate leading-none mb-1">{currentUser.nombre}</p>
+              <p className="text-[8px] text-blue-400 font-black uppercase tracking-widest truncate">{currentUser.cargo}</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <h3 className="font-bold mb-4 text-slate-900">Por Agencia</h3>
-              <table className="w-full text-sm"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-right border-b border-gray-200">Enviado</th><th className="p-3 text-right border-b border-gray-200">Cerrado</th><th className="p-3 text-center border-b border-gray-200">Citas</th></tr></thead>
-              <tbody>{metricas.resumen.map(r=><tr key={r.agencia} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-bold text-slate-900">{r.agencia}</td><td className="p-3 text-right font-medium text-slate-700">{fMoney(r.enviado)}</td><td className="p-3 text-right text-green-700 font-bold">{fMoney(r.cerrado)}</td><td className="p-3 text-center font-bold text-slate-900">{r.citas}</td></tr>)}</tbody></table>
+          </div>
+          <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 text-xs font-black text-rose-400 hover:text-rose-300 transition-colors">
+            <LogOut size={14} /> CERRAR SESIÓN
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
+        
+        {activeTab === 'dashboard' && (
+          <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">Hola, {currentUser.nombre.split(' ')[0]}</h2>
+                <p className="text-slate-500 font-medium">Asignación: <span className="text-blue-600 font-bold">{currentUser.agencias}</span></p>
+              </div>
+              {currentUser.role === 'admin' && (
+                <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-200 flex">
+                  <button onClick={() => setViewMode('team')} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'team' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}>Equipo</button>
+                  <button onClick={() => setViewMode('personal')} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'personal' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}>Mi Pipe</button>
+                </div>
+              )}
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
+              <KpiCard icon={CheckCircle2} color="green" label="Total Cerrado" value={formatCurrency(stats.totalCerrado)} />
+              <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
+            </div>
+
+            {currentUser.role === 'admin' && viewMode === 'team' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                  <h3 className="font-bold text-slate-900 mb-6">💰 Revenue por Comercial</h3>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} /><Bar dataKey="propuestas" fill="#3b82f6" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                  <h3 className="font-bold text-slate-900 mb-6">🗓️ Citas Semanales</h3>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} /><Bar dataKey="citas" fill="#f59e0b" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === 'propuestas' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nueva Propuesta</h3>
-              <form onSubmit={handleSubmitPropuesta} className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <input required type="date" value={fechaPropuesta} onChange={e=>{setFechaPropuesta(e.target.value);setFormPropuesta({...formPropuesta, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <select value={formPropuesta.agencia} onChange={e=>setFormPropuesta({...formPropuesta, agencia: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
-                  {agenciasDelUsuario.map(a=><option key={a} value={a}>{a}</option>)}
-                </select>
-                <input required placeholder="Proyecto" value={formPropuesta.nombre} onChange={e=>setFormPropuesta({...formPropuesta, nombre: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <input required type="number" placeholder="Monto Enviado $" value={formPropuesta.montoEnviado} onChange={e=>setFormPropuesta({...formPropuesta, montoEnviado: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <select value={formPropuesta.estatus} onChange={e=>setFormPropuesta({...formPropuesta, estatus: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">{ESTATUS.map(a=><option key={a} value={a}>{a}</option>)}</select>
-                <input type="number" placeholder="Monto Cerrado $" disabled={formPropuesta.estatus!=='Cerrada'} value={formPropuesta.montoCerrado} onChange={e=>setFormPropuesta({...formPropuesta, montoCerrado: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <div className="col-span-full text-right"><button type="submit" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-sm">Guardar Propuesta</button></div>
-              </form>
-            </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Historial</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-3 text-left text-purple-800 border-b border-gray-200">Vendedor</th>}<th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-left border-b border-gray-200">Proyecto</th><th className="p-3 text-left border-b border-gray-200">Estatus</th><th className="p-3 text-right border-b border-gray-200">Cerrado</th><th className="p-3 text-center border-b border-gray-200">Editar</th></tr></thead>
-              <tbody>{misPropuestas.map(p=><tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-medium text-slate-700">{p.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-3 text-purple-700 font-bold">{p.vendedor}</td>}<td className="p-3 font-bold text-slate-900">{p.agencia}</td><td className="p-3 font-medium text-slate-800">{p.nombre}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${p.estatus==='Cerrada'?'bg-green-100 text-green-800':p.estatus==='Enviada'?'bg-blue-100 text-blue-800':'bg-red-100 text-red-800'}`}>{p.estatus}</span></td><td className="p-3 text-green-700 font-bold text-right">{p.estatus==='Cerrada'?fMoney(p.montoCerrado):'-'}</td><td className="p-3 text-center"><button onClick={()=>{setEditingPropuestaId(p.id);setFormPropuesta(p);setFechaPropuesta(p.fechaCruda||'')}} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-100 transition-colors"><Edit2 size={16}/></button></td></tr>)}</tbody></table>
+        {activeTab === 'admin' && (
+          <div className="max-w-6xl mx-auto space-y-6">
+            <header className="flex justify-between items-center">
+              <div><h2 className="text-3xl font-black italic tracking-tight text-slate-900 uppercase">Control Maestro</h2><p className="text-slate-500 font-medium font-sans">Gestión de cargos y asignación de agencias.</p></div>
+              <button onClick={() => { setEditingUser(null); setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' }); setShowModalUser(true); }} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={20} /> Nuevo Perfil</button>
+            </header>
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                    <th className="p-5">Colaborador / Cargo</th>
+                    <th className="p-5">Asignación</th>
+                    <th className="p-5">Pass</th>
+                    <th className="p-5">Rol</th>
+                    <th className="p-5 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {usuarios.map(u => (
+                    <tr key={u.id} className="hover:bg-slate-50/50 transition">
+                      <td className="p-5">
+                        <div className="font-bold text-slate-900">{u.nombre}</div>
+                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{u.cargo}</div>
+                      </td>
+                      <td className="p-5 text-xs text-slate-500 font-medium">{u.agencias}</td>
+                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest">{u.pass}</td>
+                      <td className="p-5"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span></td>
+                      <td className="p-5 text-right space-x-2">
+                        <button onClick={() => { setEditingUser(u); setFormUser(u); setShowModalUser(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit3 size={18}/></button>
+                        <button onClick={() => deleteUser(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18}/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
         {activeTab === 'citas' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nueva Cita</h3>
-              <form onSubmit={handleAddCita} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <input required type="date" value={fechaCita} onChange={e=>{setFechaCita(e.target.value);setFormCita({...formCita, semana: obtenerRangoSemana(e.target.value)})}} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <select value={formCita.agencia} onChange={e=>setFormCita({...formCita, agencia: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
-                  {agenciasDelUsuario.map(a=><option key={a} value={a}>{a}</option>)}
-                </select>
-                <input required placeholder="Persona" value={formCita.persona} onChange={e=>setFormCita({...formCita, persona: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <input required placeholder="Cuenta (ej. Netflix)" value={formCita.cuenta} onChange={e=>setFormCita({...formCita, cuenta: e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <div className="col-span-full text-right"><button type="submit" className="bg-purple-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-purple-700 shadow-sm">Guardar Cita</button></div>
-              </form>
-            </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Historial</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Semana</th>{['jefe','admin'].includes(perfil)&&<th className="p-3 text-left text-purple-800 border-b border-gray-200">Vendedor</th>}<th className="p-3 text-left border-b border-gray-200">Agencia</th><th className="p-3 text-left border-b border-gray-200">Persona</th><th className="p-3 text-left border-b border-gray-200">Cuenta</th></tr></thead>
-              <tbody>{misCitas.map(c=><tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-medium text-slate-700">{c.semana}</td>{['jefe','admin'].includes(perfil)&&<td className="p-3 text-purple-700 font-bold">{c.vendedor}</td>}<td className="p-3 font-bold text-slate-900">{c.agencia}</td><td className="p-3 font-medium text-slate-800">{c.persona}</td><td className="p-3"><span className="bg-gray-200 border border-gray-300 px-2 py-1 rounded text-xs font-bold text-slate-900">{c.cuenta}</span></td></tr>)}</tbody></table>
+          <div className="max-w-6xl mx-auto space-y-6">
+            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-3xl font-black italic tracking-tight">Agenda Semanal</h2>
+              <button onClick={() => setShowModalCita(true)} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all font-sans">
+                <Plus size={20} /> Registrar Cita
+              </button>
+            </header>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {citas.filter(c => (currentUser.role === 'admin' && viewMode === 'team') || c.vendedor === currentUser.nombre).map(c => (
+                <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-blue-400 transition-all group">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="bg-slate-50 p-4 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={24} /></div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{c.semana}</span>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 leading-tight mb-2">{c.agencia}</h4>
+                  <p className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-tighter leading-none">{c.cuenta}</p>
+                  <div className="pt-6 border-t border-slate-50 space-y-4">
+                    <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><User size={14} className="text-blue-500" /> {c.vendedor}</div>
+                    <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><Calendar size={14} className="text-slate-400" /> {c.fechaCruda}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {activeTab === 'usuarios' && perfil === 'admin' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold mb-4 text-lg text-slate-900">Nuevo Usuario</h3>
-              <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input required type="email" placeholder="Correo (@taptapdigital.com)" value={formUsuario.email} onChange={e=>setFormUsuario({...formUsuario, email:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <input required placeholder="Nombre Completo" value={formUsuario.nombre} onChange={e=>setFormUsuario({...formUsuario, nombre:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <select value={formUsuario.rol} onChange={e=>setFormUsuario({...formUsuario, rol:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium">
-                  <option value="comercial">Comercial</option>
-                  <option value="jefe">Jefe</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <input required placeholder="Contraseña (mín 6)" value={formUsuario.password} onChange={e=>setFormUsuario({...formUsuario, password:e.target.value})} className="bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/>
-                <div className="md:col-span-4"><input required placeholder="Agencias separadas por coma (Ej. Dentsu, Havas)" value={formUsuario.agencias} onChange={e=>setFormUsuario({...formUsuario, agencias:e.target.value})} className="w-full bg-white text-slate-900 border border-gray-300 p-2.5 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-medium"/></div>
-                <div className="md:col-span-4 text-right"><button type="submit" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-sm">Crear Usuario</button></div>
-              </form>
-            </div>
-            {solicitudesGlobales.length > 0 && (
-              <div className="bg-yellow-50 p-6 rounded-xl shadow-sm border border-yellow-200"><h3 className="font-bold text-yellow-900 mb-4 text-lg">Solicitudes Pendientes</h3>
-                {solicitudesGlobales.map(s => <div key={s.id} className="flex justify-between border-b border-yellow-200 py-3 items-center gap-2"><span className="font-bold text-yellow-900">{s.email}</span><button onClick={()=>handleAprobarSolicitud(s)} className="text-white bg-green-600 px-4 py-2 rounded-lg font-bold hover:bg-green-700 text-sm whitespace-nowrap shadow-sm">Aprobar</button></div>)}
-              </div>
-            )}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-x-auto"><h3 className="font-bold mb-4 text-lg text-slate-900">Directorio</h3>
-              <table className="w-full text-sm whitespace-nowrap"><thead className="bg-gray-100 text-slate-800 uppercase font-bold"><tr><th className="p-3 text-left border-b border-gray-200">Nombre</th><th className="p-3 text-left border-b border-gray-200">Correo</th><th className="p-3 text-left border-b border-gray-200">Contraseña</th><th className="p-3 text-left border-b border-gray-200">Agencias</th><th className="p-3 text-left border-b border-gray-200">Rol</th><th className="p-3 text-center border-b border-gray-200">Borrar</th></tr></thead>
-              <tbody>{usuariosGlobales.map(u=><tr key={u.email} className="border-b border-gray-100 hover:bg-gray-50"><td className="p-3 font-bold text-slate-900">{u.nombre}</td><td className="p-3 font-medium text-slate-700">{u.email}</td><td className="p-3 font-mono text-xs font-bold text-slate-600">{u.password}</td><td className="p-3 text-xs font-medium text-slate-700 max-w-xs truncate" title={u.agencias?.join(', ')}>{u.agencias?.join(', ')}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${u.rol === 'admin' ? 'bg-purple-100 text-purple-900' : u.rol === 'jefe' ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-900'}`}>{u.rol.toUpperCase()}</span></td><td className="p-3 text-center"><button onClick={async()=>window.confirm(`¿Seguro que quieres borrar a ${u.nombre}?`) && await deleteDoc(doc(db,'usuarios',u.email))} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition-colors"><Trash2 size={16}/></button></td></tr>)}</tbody></table>
+        {activeTab === 'pipe' && (
+          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+            <h2 className="text-3xl font-black italic tracking-tight uppercase">Pipe de Drive</h2>
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  <tr><th className="p-5">Fecha</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-right">Monto</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {propuestas.filter(p => (currentUser.role === 'admin' && viewMode === 'team') || p.vendedor === currentUser.nombre).map(p => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition">
+                      <td className="p-5 text-slate-400 font-medium">{p.fechaCruda}</td>
+                      <td className="p-5 font-bold text-slate-800">{p.nombre}</td>
+                      <td className="p-5"><span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-tighter">{p.vendedor}</span></td>
+                      <td className="p-5 font-black text-slate-900 text-right">{formatCurrency(p.montoEnviado)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
       </main>
+
+      {/* MODAL: CONTROL MAESTRO */}
+      {showModalUser && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-black tracking-tight">{editingUser ? 'Editar Perfil' : 'Nuevo Colaborador'}</h3>
+              <button onClick={() => setShowModalUser(false)} className="text-slate-300 hover:text-slate-900"><X size={24}/></button>
+            </div>
+            <form onSubmit={saveUser} className="space-y-4 font-sans">
+              <InputGroup label="Nombre" value={formUser.nombre} onChange={v => setFormUser({...formUser, nombre: v})} />
+              <InputGroup label="Cargo Oficial" value={formUser.cargo} onChange={v => setFormUser({...formUser, cargo: v})} placeholder="Ej. VP Revenue México" />
+              <InputGroup label="Agencias Asignadas" value={formUser.agencias} onChange={v => setFormUser({...formUser, agencias: v})} placeholder="Ej. Publicis, WPP..." />
+              <InputGroup label="Contraseña" value={formUser.pass} onChange={v => setFormUser({...formUser, pass: v})} />
+              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Nivel Acceso</label><select className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={formUser.role} onChange={e => setFormUser({...formUser, role: e.target.value})}><option value="comercial">Comercial</option><option value="admin">Administrador</option></select></div>
+              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CITAS */}
+      {showModalCita && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10">
+            <div className="flex justify-between items-center mb-8"><h3 className="text-2xl font-black tracking-tight">Agendar Cita</h3><button onClick={() => setShowModalCita(false)} className="text-slate-300 hover:text-slate-900"><X size={24}/></button></div>
+            <form onSubmit={guardarCita} className="space-y-4">
+              <InputGroup label="Agencia / Partner" value={nuevaCita.agencia} onChange={v => setNuevaCita({...nuevaCita, agencia: v})} />
+              <InputGroup label="Marca / Cuenta" value={nuevaCita.cuenta} onChange={v => setNuevaCita({...nuevaCita, cuenta: v})} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Día</label><input type="date" required className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" value={nuevaCita.fechaCruda} onChange={e => setNuevaCita({...nuevaCita, fechaCruda: e.target.value})} /></div>
+                <div className="space-y-1 text-left"><label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Semana</label><input className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none" placeholder="23 al 27 Mar" value={nuevaCita.semana} onChange={e => setNuevaCita({...nuevaCita, semana: e.target.value})} required /></div>
+              </div>
+              <InputGroup label="Contacto" value={nuevaCita.persona} onChange={v => setNuevaCita({...nuevaCita, persona: v})} />
+              <button type="submit" className="w-full bg-slate-900 text-white font-black p-5 rounded-2xl shadow-xl mt-4 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Guardar</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidebarBtn({ id, icon: Icon, label, active, onClick }) {
+  const isAct = active === id;
+  return (
+    <button onClick={() => onClick(id)} className={`w-full flex items-center gap-3 p-4 rounded-2xl transition-all ${isAct ? 'bg-blue-600 shadow-lg shadow-blue-600/30 font-bold' : 'text-slate-500 hover:bg-slate-900 hover:text-white'}`}>
+      <Icon size={18} /> {label}
+    </button>
+  );
+}
+
+function KpiCard({ icon: Icon, color, label, value }) {
+  const colors = { blue: "bg-blue-50 text-blue-600", green: "bg-green-50 text-green-600", amber: "bg-amber-50 text-amber-600" };
+  return (
+    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col gap-4 shadow-sm">
+      <div className="flex items-center gap-3 justify-center md:justify-start">
+        <div className={`p-3 rounded-2xl ${colors[color]}`}><Icon size={20} /></div>
+        <span className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">{label}</span>
+      </div>
+      <div className="text-2xl font-black text-slate-900 tracking-tight text-center md:text-left">{value}</div>
+    </div>
+  );
+}
+
+function InputGroup({ label, value, onChange, placeholder = "" }) {
+  return (
+    <div className="space-y-1 text-left">
+      <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">{label}</label>
+      <input required className="w-full bg-slate-50 rounded-2xl p-4 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all font-sans" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} />
     </div>
   );
 }
