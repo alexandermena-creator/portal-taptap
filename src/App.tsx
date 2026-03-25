@@ -494,9 +494,9 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera Inteligente y Filtros */}
-        <header className="max-w-6xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-          <div className="text-left w-full xl:w-auto">
+        {/* Cabecera Inteligente y Filtros con Flex-Wrap responsivo */}
+        <header className="max-w-6xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div className="text-left w-full lg:w-auto">
             <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-2 flex items-center gap-2">
               Hola, {String(currentUser?.nombre || '').split(' ')[0]} <span>👋</span>
             </h2>
@@ -505,7 +505,7 @@ export default function App() {
             </p>
           </div>
           
-          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-center gap-3">
+          <div className="w-full lg:w-auto flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
             
             {/* BOTÓN CALENDARIO DESPLEGABLE */}
             <div className="relative w-full sm:w-auto">
@@ -522,7 +522,7 @@ export default function App() {
               </button>
 
               {isDatePickerOpen && (
-                <div className="absolute top-full right-0 xl:left-0 mt-2 p-6 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-50 w-full sm:w-80 animate-in slide-in-from-top-2">
+                <div className="absolute top-full right-0 lg:left-0 mt-2 p-6 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-50 w-full sm:w-80 animate-in slide-in-from-top-2">
                   <div className="flex justify-between items-center mb-5">
                     <h4 className="font-black text-slate-900">Rango de Fechas</h4>
                     <button onClick={() => setIsDatePickerOpen(false)} className="text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-full transition-colors"><X size={16}/></button>
@@ -569,8 +569,9 @@ export default function App() {
         {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            {/* 5 KPIs (Se agregó "Committed") */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            
+            {/* GRID INTELIGENTE PARA LOS 5 KPIs (Permite hacer wrap armónico en escritorio y móvil) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
               <KpiCard icon={Target} color="indigo" label="Committed" value={formatCurrency(stats.totalCommitted)} />
               <KpiCard icon={CheckCircle2} color="green" label="Total WON" value={formatCurrency(stats.totalCerrado)} />
@@ -578,10 +579,10 @@ export default function App() {
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
 
-            {/* Cambiamos el grid para acomodar 4 gráficas en pantallas grandes (2x2) */}
-            <div className={`grid grid-cols-1 ${isMaster ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8`}>
+            {/* Gráficas con espacio generoso (1 o 2 columnas) */}
+            <div className={`grid grid-cols-1 ${isMaster ? 'xl:grid-cols-2' : 'grid-cols-1'} gap-8`}>
               
-              {/* Gráfica de Dona: Estatus del Pipe con Porcentajes */}
+              {/* Gráfica de Dona: Estatus del Pipe */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
                 <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2 w-full"><PieChartIcon size={18} className="text-purple-500"/> Estatus del Pipe</h3>
                 <div className="w-full flex-1 min-h-[300px]">
@@ -629,7 +630,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* NUEVO: Cantidad de propuestas por comercial */}
+                  {/* Volumen de Propuestas */}
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col">
                     <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2"><FileText size={18} className="text-emerald-500"/> Volumen de Propuestas</h3>
                     <div className="flex-1 min-h-[300px]">
@@ -686,7 +687,6 @@ export default function App() {
               </button>
             </div>
             
-            {/* Contenedor de la tabla con Scroll Interno para no alargar la página */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative">
               <div className="max-h-[600px] overflow-auto w-full relative">
                 <table className="w-full text-left min-w-[800px]">
@@ -949,7 +949,7 @@ function KpiCard({ icon: Icon, color, label, value }) {
         <div className={`p-3 rounded-2xl border ${colors[color]}`}><Icon size={20} /></div>
         <span className="text-slate-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{label}</span>
       </div>
-      <div className="text-2xl xl:text-3xl font-black text-slate-900 tracking-tighter truncate" title={value}>
+      <div className="text-2xl xl:text-3xl font-black text-slate-900 tracking-tighter" style={{ wordBreak: 'break-word' }}>
         {value}
       </div>
     </div>
