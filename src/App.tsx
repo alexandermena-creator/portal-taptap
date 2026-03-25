@@ -688,8 +688,8 @@ export default function App() {
             
             {/* Contenedor de la tabla con Scroll Interno para no alargar la página */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative">
-              <div className="max-h-[600px] overflow-y-auto w-full relative">
-                <table className="w-full text-left">
+              <div className="max-h-[600px] overflow-auto w-full relative">
+                <table className="w-full text-left min-w-[800px]">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-widest sticky top-0 z-10 shadow-sm">
                     <tr><th className="p-5">Fecha / Sem.</th><th className="p-5">Campaña</th><th className="p-5">Manager</th><th className="p-5 text-center">Estatus</th><th className="p-5 text-right">Monto</th></tr>
                   </thead>
@@ -792,43 +792,45 @@ export default function App() {
               </div>
               <button onClick={() => { setEditingUser(null); setFormUser({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' }); setShowModalUser(true); }} className="bg-slate-900 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={20} /> Nuevo Perfil</button>
             </header>
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    <th className="p-5">Colaborador / Cargo</th>
-                    <th className="p-5">Asignación</th>
-                    <th className="p-5">Pass</th>
-                    <th className="p-5">Rol / Nivel</th>
-                    <th className="p-5 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {usuarios.map(u => (
-                    <tr key={u.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-5">
-                        <div className="font-bold text-slate-900">{String(u.nombre || '')}</div>
-                        <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter mt-1">{String(u.cargo || '')}</div>
-                      </td>
-                      <td className="p-5 text-xs text-slate-500 font-medium">{String(u.agencias || '')}</td>
-                      <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest bg-slate-50 rounded p-1 mx-2">{String(u.pass || '')}</td>
-                      <td className="p-5">
-                        <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
-                          u.role === 'admin' ? 'bg-rose-50 text-rose-700 border-rose-100' : 
-                          u.role === 'manager' ? 'bg-amber-50 text-amber-700 border-amber-100' : 
-                          'bg-blue-50 text-blue-700 border-blue-100'
-                        }`}>
-                          {u.role === 'manager' ? 'Directivo' : String(u.role || '')}
-                        </span>
-                      </td>
-                      <td className="p-5 text-right space-x-2">
-                        <button onClick={() => { setEditingUser(u); setFormUser(u); setShowModalUser(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all"><Edit3 size={16}/></button>
-                        <button onClick={() => deleteUser(u.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all"><Trash2 size={16}/></button>
-                      </td>
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-left min-w-[800px] whitespace-nowrap md:whitespace-normal">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                      <th className="p-5">Colaborador / Cargo</th>
+                      <th className="p-5">Asignación</th>
+                      <th className="p-5">Pass</th>
+                      <th className="p-5">Rol / Nivel</th>
+                      <th className="p-5 text-right">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usuarios.map(u => (
+                      <tr key={u.id} className="hover:bg-slate-50/50 transition">
+                        <td className="p-5">
+                          <div className="font-bold text-slate-900">{String(u.nombre || '')}</div>
+                          <div className="text-[10px] font-black text-blue-500 uppercase tracking-tighter mt-1">{String(u.cargo || '')}</div>
+                        </td>
+                        <td className="p-5 text-xs text-slate-500 font-medium">{String(u.agencias || '')}</td>
+                        <td className="p-5 font-mono text-slate-400 text-[10px] tracking-widest bg-slate-50 rounded p-1 mx-2">{String(u.pass || '')}</td>
+                        <td className="p-5">
+                          <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                            u.role === 'admin' ? 'bg-rose-50 text-rose-700 border-rose-100' : 
+                            u.role === 'manager' ? 'bg-amber-50 text-amber-700 border-amber-100' : 
+                            'bg-blue-50 text-blue-700 border-blue-100'
+                          }`}>
+                            {u.role === 'manager' ? 'Directivo' : String(u.role || '')}
+                          </span>
+                        </td>
+                        <td className="p-5 text-right space-x-2">
+                          <button onClick={() => { setEditingUser(u); setFormUser(u); setShowModalUser(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all"><Edit3 size={16}/></button>
+                          <button onClick={() => deleteUser(u.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all"><Trash2 size={16}/></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
