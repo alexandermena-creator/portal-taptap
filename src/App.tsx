@@ -377,6 +377,7 @@ export default function App() {
     const chartData = targetUsers.map(nombre => ({
       name: nombre.split(' ')[0],
       propuestas: Number(propuestasFiltradas.filter(p => p.vendedor === nombre).reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0)),
+      cantidadPropuestas: Number(propuestasFiltradas.filter(p => p.vendedor === nombre).length),
       citas: Number(citasFiltradas.filter(c => c.vendedor === nombre).length)
     }));
 
@@ -577,7 +578,8 @@ export default function App() {
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
 
-            <div className={`grid grid-cols-1 ${isMaster ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} gap-8`}>
+            {/* Cambiamos el grid para acomodar 4 gráficas en pantallas grandes (2x2) */}
+            <div className={`grid grid-cols-1 ${isMaster ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8`}>
               
               {/* Gráfica de Dona: Estatus del Pipe con Porcentajes */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
@@ -626,6 +628,27 @@ export default function App() {
                       </ResponsiveContainer>
                     </div>
                   </div>
+
+                  {/* NUEVO: Cantidad de propuestas por comercial */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col">
+                    <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2"><FileText size={18} className="text-emerald-500"/> Volumen de Propuestas</h3>
+                    <div className="flex-1 min-h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.chartData} margin={{top: 10, right: 10, left: 0, bottom: 0}}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12, fontWeight: 600}} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} allowDecimals={false} width={30} />
+                          <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 'bold', color: '#0f172a'}} />
+                          <Bar dataKey="cantidadPropuestas" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                             {stats.chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={VENDEDOR_COLORS[entry.name] || '#94a3b8'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col">
                     <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2"><Calendar size={18} className="text-amber-500"/> Citas Registradas</h3>
                     <div className="flex-1 min-h-[300px]">
