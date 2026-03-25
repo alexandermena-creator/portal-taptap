@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
@@ -36,15 +36,14 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : "1";
 // --- 2. CONSTANTES Y COLORES DEL EQUIPO COMERCIAL ---
 const COMERCIALES = ['Alexander Mena', 'Berenisse López', 'David Vanegas'];
 
-// Colores únicos para cada vendedor en las gráficas
 const VENDEDOR_COLORS = {
   'Alexander': '#3b82f6', // Azul TapTap
   'Berenisse': '#ec4899', // Rosa
   'David': '#10b981',     // Verde Esmeralda
 };
 
-// Paleta dinámica vibrante para cualquier estatus que venga del Drive
-const PALETA_ESTATUS = ['#8b5cf6', '#0ea5e9', '#f59e0b', '#f43f5e', '#10b981', '#6366f1', '#d946ef'];
+// Paleta dinámica vibrante
+const PALETA_ESTATUS = ['#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#0ea5e9', '#d946ef'];
 
 // --- 3. UTILIDADES Y CALCULADORAS ---
 const mapManagerToVendedor = (vendedorRaw) => {
@@ -124,6 +123,21 @@ const obtenerRangoSemana = (fechaString) => {
   }
 };
 
+// Renderizador para los porcentajes dentro de la Dona
+const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+  const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+
+  if (percent < 0.05) return null; // Oculta % muy pequeños para no amontonar
+  
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight="bold">
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null); 
@@ -131,32 +145,26 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [propuestas, setPropuestas] = useState([]);
   const [citas, setCitas] = useState([]);
-  const [loading, setLoading] = useState(true);
   
-  // Filtros Globales
   const [filtroVendedor, setFiltroVendedor] = useState('Todos');
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
   const [filtroFechaFin, setFiltroFechaFin] = useState('');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
-  // Modales y Estados de Edición
   const [showModalCita, setShowModalCita] = useState(false);
   const [showModalUser, setShowModalUser] = useState(false);
   const [editingCitaId, setEditingCitaId] = useState(null);
   const [isCustomAgencia, setIsCustomAgencia] = useState(false);
   
-  // Login State
   const [showPassword, setShowPassword] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
   const [loginError, setLoginError] = useState('');
   const [userAuth, setUserAuth] = useState(null);
 
-  // Formularios
   const [editingUser, setEditingUser] = useState(null);
   const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
   const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
 
-  // Inicialización de Autenticación
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -174,7 +182,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Carga de Datos
   useEffect(() => {
     if (!userAuth || !db) return;
 
@@ -202,7 +209,7 @@ export default function App() {
           vendedor: mapManagerToVendedor(d.vendedor),
           montoEnviado: parseMonto(d.montoEnviado),
           montoCerrado: parseMonto(d.montoCerrado),
-          semana: d.semana || obtenerRangoSemana(d.fechaCruda) // Calcula la semana si no la trae Make
+          semana: d.semana || obtenerRangoSemana(d.fechaCruda)
         };
       }));
     }, (error) => console.error("Error cargando propuestas:", error));
@@ -210,19 +217,13 @@ export default function App() {
     const unsubCitas = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), (snap) => {
       setCitas(snap.docs.map(doc => {
         const d = doc.data();
-        return { 
-          id: doc.id, 
-          ...d,
-          semana: d.semana || obtenerRangoSemana(d.fechaCruda) 
-        };
+        return { id: doc.id, ...d, semana: d.semana || obtenerRangoSemana(d.fechaCruda) };
       }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-      setLoading(false);
     }, (error) => console.error("Error cargando citas:", error));
 
     return () => { unsubUsers(); unsubProp(); unsubCitas(); };
   }, [userAuth]);
 
-  // Manejo del Login
   const handleLogin = (e) => {
     e.preventDefault();
     const found = usuarios.find(u => u.nombre === loginForm.user && u.pass === loginForm.pass);
@@ -262,7 +263,6 @@ export default function App() {
     }
   };
 
-  // Guardar, Editar y Eliminar Citas
   const guardarCita = async (e) => {
     e.preventDefault();
     try {
@@ -298,7 +298,6 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DE FILTRADO (Vendedor + Rango de Fechas) ---
   const isMaster = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const propuestasFiltradas = useMemo(() => {
@@ -314,7 +313,6 @@ export default function App() {
         return t >= start && t <= end;
       });
     }
-    
     return filtradas;
   }, [propuestas, currentUser, isMaster, filtroVendedor, filtroFechaInicio, filtroFechaFin]);
 
@@ -331,21 +329,17 @@ export default function App() {
         return t >= start && t <= end;
       });
     }
-    
     return filtradas;
   }, [citas, currentUser, isMaster, filtroVendedor, filtroFechaInicio, filtroFechaFin]);
 
-  // Recálculo de métricas
   const stats = useMemo(() => {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
     const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoCerrado) || 0), 0);
     const tasaBateo = totalEnviado > 0 ? ((totalCerrado / totalEnviado) * 100).toFixed(1) : 0;
     
-    // Distribución del Pipe Dinámica
     const estatusMap = propuestasFiltradas.reduce((acc, p) => {
         const e = String(p.estatus || 'Sin Estatus').toUpperCase();
         if (!acc[e]) acc[e] = 0;
-        // Tomamos el valor de enviado para la dona, a menos que sea un estatus que debamos ignorar o cerrar
         acc[e] += (e === 'CERRADA' && Number(p.montoCerrado)) ? Number(p.montoCerrado) : (Number(p.montoEnviado) || 0);
         return acc;
     }, {});
@@ -364,23 +358,13 @@ export default function App() {
       citas: Number(citasFiltradas.filter(c => c.vendedor === nombre).length)
     }));
 
-    return { 
-      totalEnviado, 
-      totalCerrado,
-      tasaBateo,
-      countCitas: citasFiltradas.length, 
-      chartData,
-      pipeStatusData
-    };
+    return { totalEnviado, totalCerrado, tasaBateo, countCitas: citasFiltradas.length, chartData, pipeStatusData };
   }, [propuestasFiltradas, citasFiltradas, filtroVendedor]);
 
-  // --- EXPORTAR A CSV SEGURO ---
   const downloadCSV = (data, filename) => {
     if (!data || data.length === 0) return;
-    
     const headers = Object.keys(data[0]).filter(k => !['id', 'createdAt'].includes(k));
     const csvRows = [headers.join(',')];
-    
     for (const row of data) {
       const values = headers.map(header => {
         const val = row[header];
@@ -389,7 +373,6 @@ export default function App() {
       });
       csvRows.push(values.join(','));
     }
-    
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -400,7 +383,6 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Extraer las agencias del usuario para el selector
   const misAgencias = currentUser?.agencias ? String(currentUser.agencias).split(',').map(a => a.trim()) : [];
 
   // --- VISTA: LOGIN ---
@@ -481,18 +463,18 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera Inteligente y Filtros Premium */}
-        <header className="max-w-6xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-2">
-              Hola, {String(currentUser?.nombre || '').split(' ')[0]} <span className="text-2xl">👋</span>
+        {/* Cabecera Inteligente y Filtros */}
+        <header className="max-w-6xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+          <div className="text-left w-full xl:w-auto">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-2 flex items-center gap-2">
+              Hola, {String(currentUser?.nombre || '').split(' ')[0]} <span>👋</span>
             </h2>
             <p className="text-slate-500 text-sm font-medium">
               Asignación: <span className="text-blue-600 font-bold">{String(currentUser?.agencias || '')}</span>
             </p>
           </div>
           
-          <div className="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-3">
+          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-center gap-3">
             
             {/* BOTÓN CALENDARIO DESPLEGABLE */}
             <div className="relative w-full sm:w-auto">
@@ -509,7 +491,7 @@ export default function App() {
               </button>
 
               {isDatePickerOpen && (
-                <div className="absolute top-full right-0 lg:left-0 mt-2 p-6 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-50 w-full sm:w-80 animate-in slide-in-from-top-2">
+                <div className="absolute top-full right-0 xl:left-0 mt-2 p-6 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-50 w-full sm:w-80 animate-in slide-in-from-top-2">
                   <div className="flex justify-between items-center mb-5">
                     <h4 className="font-black text-slate-900">Rango de Fechas</h4>
                     <button onClick={() => setIsDatePickerOpen(false)} className="text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-full transition-colors"><X size={16}/></button>
@@ -544,6 +526,7 @@ export default function App() {
                 onChange={e => setFiltroVendedor(e.target.value)}
               >
                 <option value="Todos">🚀 Todo el Equipo</option>
+                {/* FORZAMOS A QUE SOLO SALGAN LOS COMERCIALES */}
                 {COMERCIALES.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -555,8 +538,8 @@ export default function App() {
         {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            {/* 4 KPIs con Tasa de Bateo */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* 4 KPIs con nuevo grid más espacioso */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
               <KpiCard icon={CheckCircle2} color="green" label="Total Cerrado" value={formatCurrency(stats.totalCerrado)} />
               <KpiCard icon={Activity} color="purple" label="Tasa de Bateo" value={`${stats.tasaBateo}%`} />
@@ -565,7 +548,7 @@ export default function App() {
 
             <div className={`grid grid-cols-1 ${isMaster ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} gap-8`}>
               
-              {/* Gráfica de Dona: Estatus del Pipe (Visible para TODOS) */}
+              {/* Gráfica de Dona: Estatus del Pipe con Porcentajes */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
                 <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2 w-full"><PieChartIcon size={18} className="text-purple-500"/> Estatus del Pipe</h3>
                 <div className="w-full flex-1 min-h-[300px]">
@@ -573,10 +556,12 @@ export default function App() {
                     <PieChart>
                       <Pie
                         data={stats.pipeStatusData}
-                        innerRadius={70}
-                        outerRadius={95}
+                        innerRadius={60}
+                        outerRadius={90}
                         paddingAngle={5}
                         dataKey="value"
+                        label={renderPieLabel}
+                        labelLine={false}
                       >
                         {stats.pipeStatusData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -906,8 +891,8 @@ function KpiCard({ icon: Icon, color, label, value }) {
         <div className={`p-3 rounded-2xl border ${colors[color]}`}><Icon size={20} /></div>
         <span className="text-slate-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{label}</span>
       </div>
-      {/* Solución a los números cortados: dejamos que respiren con break-word en lugar de truncarlos */}
-      <div className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 tracking-tight" style={{ wordBreak: 'break-word' }}>
+      {/* Uso de truncate para pantallas pequeñas y texto expandido en escritorio */}
+      <div className="text-2xl xl:text-3xl font-black text-slate-900 tracking-tighter truncate" title={value}>
         {value}
       </div>
     </div>
