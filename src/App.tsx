@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   LayoutDashboard, FileText, Calendar, Users, Plus, TrendingUp, 
-  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Download, Activity, PieChart as PieChartIcon
+  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Download, Activity, PieChart as PieChartIcon, Target
 } from 'lucide-react';
 
 // --- 1. CONFIGURACIÓN DE FIREBASE ---
@@ -334,13 +334,35 @@ export default function App() {
 
   const stats = useMemo(() => {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoEnviado) || 0), 0);
-    const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + (Number(p.montoCerrado) || 0), 0);
+    
+    // Sólo sumar como WON/CERRADO si el estatus incluye WON o CERRADA explícitamente
+    const totalCerrado = propuestasFiltradas.reduce((acc, p) => {
+        const status = String(p.estatus || '').toUpperCase();
+        if (status.includes('WON') || status === 'CERRADA') {
+            return acc + (Number(p.montoCerrado) || Number(p.montoEnviado) || 0);
+        }
+        return acc;
+    }, 0);
+
+    // Sumar como COMMITTED
+    const totalCommitted = propuestasFiltradas.reduce((acc, p) => {
+        const status = String(p.estatus || '').toUpperCase();
+        if (status.includes('COMMITTED') || status === 'COMPROMETIDO') {
+            return acc + (Number(p.montoEnviado) || 0);
+        }
+        return acc;
+    }, 0);
+
     const tasaBateo = totalEnviado > 0 ? ((totalCerrado / totalEnviado) * 100).toFixed(1) : 0;
     
     const estatusMap = propuestasFiltradas.reduce((acc, p) => {
         const e = String(p.estatus || 'Sin Estatus').toUpperCase();
         if (!acc[e]) acc[e] = 0;
-        acc[e] += (e === 'CERRADA' && Number(p.montoCerrado)) ? Number(p.montoCerrado) : (Number(p.montoEnviado) || 0);
+        if (e.includes('WON') || e === 'CERRADA') {
+            acc[e] += (Number(p.montoCerrado) || Number(p.montoEnviado) || 0);
+        } else {
+            acc[e] += (Number(p.montoEnviado) || 0);
+        }
         return acc;
     }, {});
 
@@ -358,7 +380,15 @@ export default function App() {
       citas: Number(citasFiltradas.filter(c => c.vendedor === nombre).length)
     }));
 
-    return { totalEnviado, totalCerrado, tasaBateo, countCitas: citasFiltradas.length, chartData, pipeStatusData };
+    return { 
+      totalEnviado, 
+      totalCerrado, 
+      totalCommitted, 
+      tasaBateo, 
+      countCitas: citasFiltradas.length, 
+      chartData, 
+      pipeStatusData 
+    };
   }, [propuestasFiltradas, citasFiltradas, filtroVendedor]);
 
   const downloadCSV = (data, filename) => {
@@ -538,10 +568,11 @@ export default function App() {
         {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            {/* 4 KPIs con nuevo grid más espacioso */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {/* 5 KPIs (Se agregó "Committed") */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
-              <KpiCard icon={CheckCircle2} color="green" label="Total Cerrado" value={formatCurrency(stats.totalCerrado)} />
+              <KpiCard icon={Target} color="indigo" label="Committed" value={formatCurrency(stats.totalCommitted)} />
+              <KpiCard icon={CheckCircle2} color="green" label="Total WON" value={formatCurrency(stats.totalCerrado)} />
               <KpiCard icon={Activity} color="purple" label="Tasa de Bateo" value={`${stats.tasaBateo}%`} />
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
@@ -652,8 +683,9 @@ export default function App() {
                         <td className="p-5"><span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">{String(p.vendedor || '')}</span></td>
                         <td className="p-5 text-center">
                           <span className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${
-                            p.estatus === 'Cerrada' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
-                            p.estatus === 'Perdida' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            String(p.estatus || '').toUpperCase().includes('WON') || String(p.estatus || '').toUpperCase() === 'CERRADA' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
+                            String(p.estatus || '').toUpperCase().includes('COMMITTED') ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                            String(p.estatus || '').toUpperCase().includes('LOST') || String(p.estatus || '').toUpperCase() === 'PERDIDA' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
                           }`}>
                             {String(p.estatus || 'Enviada')}
                           </span>
@@ -883,7 +915,8 @@ function KpiCard({ icon: Icon, color, label, value }) {
     blue: "bg-blue-50 text-blue-600 border-blue-100", 
     green: "bg-green-50 text-green-600 border-green-100", 
     amber: "bg-amber-50 text-amber-600 border-amber-100",
-    purple: "bg-purple-50 text-purple-600 border-purple-100" 
+    purple: "bg-purple-50 text-purple-600 border-purple-100",
+    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100" 
   };
   return (
     <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md transition-shadow h-full">
@@ -891,7 +924,6 @@ function KpiCard({ icon: Icon, color, label, value }) {
         <div className={`p-3 rounded-2xl border ${colors[color]}`}><Icon size={20} /></div>
         <span className="text-slate-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{label}</span>
       </div>
-      {/* Uso de truncate para pantallas pequeñas y texto expandido en escritorio */}
       <div className="text-2xl xl:text-3xl font-black text-slate-900 tracking-tighter truncate" title={value}>
         {value}
       </div>
