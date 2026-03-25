@@ -38,12 +38,15 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : "1";
 const mapManagerToVendedor = (vendedorRaw) => {
   if (!vendedorRaw) return 'Sin Asignar';
   const name = String(vendedorRaw).toLowerCase();
-  if (name.includes('monserrat') || name.includes('mont') || name.includes('cortina')) return 'Alexander Mena';
+  
+  // Captura todas las variantes posibles de los nombres en el Drive
+  if (name.includes('monse') || name.includes('mont') || name.includes('cortina')) return 'Alexander Mena';
   if (name.includes('estefania') || name.includes('estef') || name.includes('cordoba')) return 'Berenisse López';
   if (name.includes('dania') || name.includes('topete')) return 'David Vanegas';
   if (name.includes('alberto') || name.includes('bautista')) return 'Alberto Bautista';
-  if (name.includes('orma') || name.includes('ormazabal')) return 'Javier Ormazabal';
-  if (name.includes('velazquez') || name.includes('velázquez')) return 'Javier Velazquez';
+  if (name.includes('orma') || name.includes('ormazabal') || name.includes('javi o')) return 'Javier Ormazabal';
+  if (name.includes('velazquez') || name.includes('velázquez') || name.includes('javi v')) return 'Javier Velazquez';
+  
   return String(vendedorRaw); 
 };
 
@@ -256,15 +259,13 @@ export default function App() {
   };
 
 
-  // --- VISTA: LOGIN (CON PROTECCIÓN CONTRA RENDER NULL) ---
+  // --- VISTA: LOGIN ---
   if (!isLoggedIn || !currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans text-center">
         <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 animate-in zoom-in duration-300">
           <div>
-            {/* LOGO DE TAPTAP EN LA CARPETA PUBLIC */}
             <img src="/logo.png" alt="TapTap Logo" className="h-12 mx-auto mb-6 object-contain" />
-            
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Portal Comercial</h1>
             <p className="text-slate-400 font-medium">Equipo de Ingresos TapTap</p>
           </div>
@@ -305,7 +306,6 @@ export default function App() {
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-slate-950 text-white p-6 flex flex-col shrink-0">
         <div className="flex items-center gap-3 mb-10">
-          {/* LOGO DE TAPTAP EN LA CARPETA PUBLIC PARA EL SIDEBAR */}
           <img src="/logo.png" alt="TapTap" className="h-8 md:h-10 object-contain invert brightness-0" style={{ filter: 'brightness(0) invert(1)' }} />
         </div>
 
@@ -314,7 +314,6 @@ export default function App() {
           <SidebarBtn id="pipe" icon={FileText} label="Pipe (Drive)" active={activeTab} onClick={setActiveTab} />
           <SidebarBtn id="citas" icon={Calendar} label="Agenda Citas" active={activeTab} onClick={setActiveTab} />
           
-          {/* El botón de Control Maestro es EXCLUSIVO para rol 'admin' */}
           {currentUser?.role === 'admin' && (
             <SidebarBtn id="admin" icon={ShieldCheck} label="Control Maestro" active={activeTab} onClick={setActiveTab} />
           )}
