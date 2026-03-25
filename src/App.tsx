@@ -123,6 +123,15 @@ const obtenerRangoSemana = (fechaString) => {
   }
 };
 
+// --- Formateador elegante de fechas para el botón ---
+const formatearFechaCorta = (fechaStr) => {
+  if (!fechaStr) return '';
+  const partes = fechaStr.split('-');
+  if (partes.length !== 3) return fechaStr;
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  return `${partes[2]} ${meses[parseInt(partes[1], 10) - 1]}`;
+};
+
 // Renderizador para los porcentajes dentro de la Dona
 const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -442,7 +451,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans text-center">
         <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-10 space-y-8 animate-in zoom-in duration-300">
           <div>
-            <img src="/logo.png" alt="TapTap Logo" className="h-12 mx-auto mb-6 object-contain" />
+            <img src="/logo.png" alt="TapTap Logo" className="h-16 md:h-20 lg:h-24 mx-auto mb-8 object-contain" />
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Portal Comercial</h1>
             <p className="text-slate-500 font-medium mt-2">Equipo de Ingresos TapTap</p>
           </div>
@@ -480,10 +489,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans overflow-hidden">
       
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-slate-950 text-white p-6 flex flex-col shrink-0 border-r border-slate-800">
-        <div className="flex items-center justify-center md:justify-start gap-3 mb-10">
-          <img src="/logo.png" alt="TapTap" className="h-8 md:h-10 object-contain invert brightness-0" style={{ filter: 'brightness(0) invert(1)' }} />
+      {/* Sidebar Premium */}
+      <aside className="w-full md:w-72 bg-slate-950 text-white p-6 flex flex-col shrink-0 border-r border-slate-800">
+        <div className="flex items-center justify-center md:justify-start gap-3 mb-12 mt-4">
+          <img src="/logo.png" alt="TapTap" className="h-10 md:h-14 lg:h-16 object-contain invert brightness-0 transition-transform hover:scale-105 cursor-pointer" style={{ filter: 'brightness(0) invert(1)' }} />
         </div>
 
         <nav className="space-y-2 flex-1">
@@ -515,10 +524,10 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
-        {/* Cabecera DOCKED (Sin recuadro blanco) */}
-        <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <div className="text-left w-full md:w-auto">
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-1 flex items-center gap-2">
+        {/* Cabecera Inteligente Fluida */}
+        <header className="max-w-7xl mx-auto mb-8 bg-transparent md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border border-slate-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+          <div className="text-left w-full xl:w-max flex-shrink-0">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-2 flex items-center gap-2">
               Hola, {String(currentUser?.nombre || '').split(' ')[0]} <span>👋</span>
             </h2>
             <p className="text-slate-500 text-sm font-medium">
@@ -526,19 +535,19 @@ export default function App() {
             </p>
           </div>
           
-          <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
+          <div className="w-full xl:w-auto flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
             
-            {/* BOTÓN CALENDARIO DESPLEGABLE */}
-            <div className="relative w-full sm:w-auto">
+            {/* BOTÓN CALENDARIO DESPLEGABLE CON FECHAS FORMATEADAS */}
+            <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
               <button 
                 onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all font-bold text-sm outline-none"
+                className="flex items-center justify-center gap-2 w-full bg-white border border-slate-200 text-slate-700 px-6 py-4 sm:py-3.5 rounded-2xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all font-bold text-sm outline-none"
               >
                 <Calendar size={16} className={filtroFechaInicio || filtroFechaFin ? "text-blue-600" : "text-slate-400"} />
                 {filtroFechaInicio && filtroFechaFin 
-                  ? `${filtroFechaInicio} al ${filtroFechaFin}` 
-                  : filtroFechaInicio ? `Desde: ${filtroFechaInicio}` 
-                  : filtroFechaFin ? `Hasta: ${filtroFechaFin}`
+                  ? `${formatearFechaCorta(filtroFechaInicio)} - ${formatearFechaCorta(filtroFechaFin)}` 
+                  : filtroFechaInicio ? `Desde: ${formatearFechaCorta(filtroFechaInicio)}` 
+                  : filtroFechaFin ? `Hasta: ${formatearFechaCorta(filtroFechaFin)}`
                   : 'Filtrar Fechas'}
               </button>
 
@@ -551,11 +560,23 @@ export default function App() {
                   <div className="space-y-4">
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Fecha Inicial</label>
-                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text [color-scheme:light]" value={filtroFechaInicio} onChange={e => setFiltroFechaInicio(e.target.value)} />
+                      <input 
+                        type="date" 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer [color-scheme:light]" 
+                        value={filtroFechaInicio} 
+                        onChange={e => setFiltroFechaInicio(e.target.value)} 
+                        onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                      />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Fecha Final</label>
-                      <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-text [color-scheme:light]" value={filtroFechaFin} onChange={e => setFiltroFechaFin(e.target.value)} />
+                      <input 
+                        type="date" 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer [color-scheme:light]" 
+                        value={filtroFechaFin} 
+                        onChange={e => setFiltroFechaFin(e.target.value)} 
+                        onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                      />
                     </div>
                     {(filtroFechaInicio || filtroFechaFin) && (
                       <button 
@@ -573,12 +594,11 @@ export default function App() {
             {/* Filtro Vendedor (Solo visible para Admin/Manager) */}
             {isMaster && (
               <select 
-                className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-5 py-3 text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 hover:bg-blue-50 transition-all cursor-pointer appearance-none"
+                className="w-full sm:w-auto flex-grow sm:flex-grow-0 bg-white border border-slate-200 rounded-2xl px-6 py-4 sm:py-3.5 text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 hover:bg-blue-50 transition-all cursor-pointer appearance-none"
                 value={filtroVendedor}
                 onChange={e => setFiltroVendedor(e.target.value)}
               >
                 <option value="Todos">🚀 Todo el Equipo</option>
-                {/* FORZAMOS A QUE SOLO SALGAN LOS COMERCIALES */}
                 {COMERCIALES.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -589,10 +609,10 @@ export default function App() {
 
         {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+          <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
             
-            {/* GRID INTELIGENTE PARA LOS 5 KPIs (Permite hacer wrap armónico en escritorio y móvil) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {/* GRID INTELIGENTE FLEXIBLE (Auto-ajustable a cualquier pantalla sin aplastar) */}
+            <div className="flex flex-wrap gap-6">
               <KpiCard icon={Clock} color="blue" label="Revenue Pipe" value={formatCurrency(stats.totalEnviado)} />
               <KpiCard icon={Target} color="indigo" label="Committed" value={formatCurrency(stats.totalCommitted)} />
               <KpiCard icon={CheckCircle2} color="green" label="Total WON" value={formatCurrency(stats.totalCerrado)} />
@@ -600,10 +620,10 @@ export default function App() {
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
 
-            {/* Gráficas con espacio generoso (1 o 2 columnas) */}
+            {/* Gráficas con espacio generoso */}
             <div className={`grid grid-cols-1 ${isMaster ? 'xl:grid-cols-2' : 'grid-cols-1'} gap-8`}>
               
-              {/* Gráfica de Dona: Estatus del Pipe */}
+              {/* Gráfica de Dona: Estatus del Pipe con Porcentajes */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
                 <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2 w-full"><PieChartIcon size={18} className="text-purple-500"/> Estatus del Pipe</h3>
                 <div className="w-full flex-1 min-h-[300px]">
@@ -697,7 +717,7 @@ export default function App() {
 
         {/* TAB: PIPE DE DRIVE */}
         {activeTab === 'pipe' && (
-          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Pipe de Drive</h2>
               <button 
@@ -708,7 +728,6 @@ export default function App() {
               </button>
             </div>
             
-            {/* Contenedor de la tabla con Scroll Interno para no alargar la página */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative">
               <div className="max-h-[600px] overflow-auto w-full relative">
                 <table className="w-full text-left min-w-[800px]">
@@ -747,7 +766,7 @@ export default function App() {
 
         {/* TAB: AGENDA CITAS */}
         {activeTab === 'citas' && (
-          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Agenda Semanal</h2>
               <div className="flex gap-3 w-full md:w-auto">
@@ -773,7 +792,7 @@ export default function App() {
                 <p className="text-slate-400 font-bold">No hay citas agendadas en este rango de fechas.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {citasFiltradas.map(c => (
                   <div key={c.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 hover:border-blue-300 hover:shadow-md transition-all group relative">
                     <div className="flex justify-between items-start mb-6">
@@ -875,7 +894,7 @@ export default function App() {
 
         {/* TAB: CONTROL MAESTRO (Solo Admin) */}
         {activeTab === 'admin' && currentUser?.role === 'admin' && (
-          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">Control Maestro</h2>
@@ -993,10 +1012,10 @@ export default function App() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1 text-left">
                   <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Día</label>
-                  <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light]" value={nuevaCita.fechaCruda} onChange={e => {
+                  <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] cursor-pointer" value={nuevaCita.fechaCruda} onChange={e => {
                     const nuevaSemana = obtenerRangoSemana(e.target.value);
                     setNuevaCita({...nuevaCita, fechaCruda: e.target.value, semana: nuevaSemana});
-                  }} />
+                  }} onClick={(e) => e.target.showPicker && e.target.showPicker()} />
                 </div>
                 <div className="space-y-1 text-left">
                   <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Semana</label>
@@ -1035,12 +1054,12 @@ function KpiCard({ icon: Icon, color, label, value }) {
     indigo: "bg-indigo-50 text-indigo-600 border-indigo-100" 
   };
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md transition-shadow h-full">
+    <div className="flex-1 min-w-[200px] xl:min-w-[220px] bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md transition-shadow h-full">
       <div className="flex items-center gap-3">
         <div className={`p-3 rounded-2xl border ${colors[color]}`}><Icon size={20} /></div>
         <span className="text-slate-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{label}</span>
       </div>
-      <div className="text-2xl xl:text-3xl font-black text-slate-900 tracking-tighter" style={{ wordBreak: 'break-word' }}>
+      <div className="text-2xl md:text-[26px] xl:text-3xl font-black text-slate-900 tracking-tighter" style={{ wordBreak: 'break-word' }}>
         {value}
       </div>
     </div>
