@@ -1,23 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc, query, getDocs } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   LayoutDashboard, FileText, Calendar, Users, Plus, TrendingUp, 
-  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Briefcase
+  CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN DE FIREBASE ---
-const firebaseConfig = JSON.parse(__firebase_config);
+// --- 1. CONFIGURACIÓN REAL DE FIREBASE (Para tu entorno local) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyD92CDTTcEh_BJ53q8q0TXtFtO0Fj29u2w",
+  authDomain: "gestion-comercial-taptap.firebaseapp.com",
+  projectId: "gestion-comercial-taptap",
+  storageBucket: "gestion-comercial-taptap.firebasestorage.app",
+  messagingSenderId: "1001662665656",
+  appId: "1:1001662665656:web:4391d323fa90e3d10e354d"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const appId = "1"; // El ID de la carpeta donde Make.com guarda los datos
 
-// --- TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
+// --- 2. TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
 const mapManagerToVendedor = (vendedorRaw) => {
   if (!vendedorRaw) return 'Sin Asignar';
   const name = String(vendedorRaw).toLowerCase();
@@ -43,7 +51,7 @@ export default function App() {
   const [propuestas, setPropuestas] = useState([]);
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('team'); // 'team' o 'personal' para Admins
+  const [viewMode, setViewMode] = useState('team');
 
   // Modales
   const [showModalCita, setShowModalCita] = useState(false);
@@ -55,30 +63,26 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [userAuth, setUserAuth] = useState(null);
 
-  // Formulario Usuarios
+  // Formularios
   const [editingUser, setEditingUser] = useState(null);
   const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
-
-  // Formulario Citas
   const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
 
-  // 1. Inicialización de Autenticación
+  // 1. Inicialización de Autenticación (Modificado para local)
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (e) { console.error("Error de Auth:", e); }
+        await signInAnonymously(auth);
+      } catch (e) { 
+        console.error("Error de Auth:", e); 
+      }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUserAuth);
     return () => unsubscribe();
   }, []);
 
-  // 2. Carga de Datos y Semilla del Equipo Completo
+  // 2. Carga de Datos y Semilla del Equipo
   useEffect(() => {
     if (!userAuth) return;
 
@@ -171,16 +175,21 @@ export default function App() {
     const totalEnviado = dataFiltrada.reduce((acc, p) => acc + p.montoEnviado, 0);
     const totalCerrado = dataFiltrada.reduce((acc, p) => acc + p.montoCerrado, 0);
     
-    const chartData = usuarios
-      .map(u => ({
-        name: u.nombre.split(' ')[0],
-        propuestas: propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + p.montoEnviado, 0),
-        citas: citas.filter(c => c.vendedor === u.nombre).length
-      }));
+    const chartData = usuarios.map(u => ({
+      name: u.nombre.split(' ')[0],
+      propuestas: propuestas.filter(p => p.vendedor === u.nombre).reduce((acc, p) => acc + p.montoEnviado, 0),
+      citas: citas.filter(c => c.vendedor === u.nombre).length
+    }));
 
-    return { totalEnviado, totalCerrado, countCitas: citas.filter(c => isMaster || c.vendedor === currentUser.nombre).length, chartData };
+    return { 
+      totalEnviado, 
+      totalCerrado, 
+      countCitas: citas.filter(c => isMaster || c.vendedor === currentUser.nombre).length, 
+      chartData 
+    };
   }, [propuestas, citas, currentUser, usuarios, viewMode]);
 
+  // --- VISTA: LOGIN ---
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans text-center">
@@ -220,6 +229,7 @@ export default function App() {
     );
   }
 
+  // --- VISTA: APLICACIÓN PRINCIPAL ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans overflow-hidden">
       
@@ -255,6 +265,7 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto bg-slate-50">
         
+        {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -291,6 +302,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB: CONTROL MAESTRO */}
         {activeTab === 'admin' && (
           <div className="max-w-6xl mx-auto space-y-6">
             <header className="flex justify-between items-center">
@@ -330,6 +342,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB: AGENDA CITAS */}
         {activeTab === 'citas' && (
           <div className="max-w-6xl mx-auto space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -357,6 +370,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB: PIPE DE DRIVE */}
         {activeTab === 'pipe' && (
           <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
             <h2 className="text-3xl font-black italic tracking-tight uppercase">Pipe de Drive</h2>
@@ -381,7 +395,7 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL: CONTROL MAESTRO */}
+      {/* MODAL: CONTROL MAESTRO (EDITAR/CREAR USUARIO) */}
       {showModalUser && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10">
@@ -401,7 +415,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: CITAS */}
+      {/* MODAL: REGISTRAR CITA */}
       {showModalCita && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10">
@@ -423,6 +437,7 @@ export default function App() {
   );
 }
 
+// --- SUBCOMPONENTES ---
 function SidebarBtn({ id, icon: Icon, label, active, onClick }) {
   const isAct = active === id;
   return (
