@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
@@ -10,20 +10,23 @@ import {
   CheckCircle2, Clock, ChevronRight, X, Building2, User, Lock, LogOut, Eye, EyeOff, ShieldCheck, Edit3, Trash2, Download
 } from 'lucide-react';
 
-// --- 1. CONFIGURACIÓN REAL DE FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyD92CDTTcEh_BJ53q8q0TXtFtO0Fj29u2w",
-  authDomain: "gestion-comercial-taptap.firebaseapp.com",
-  projectId: "gestion-comercial-taptap",
-  storageBucket: "gestion-comercial-taptap.firebasestorage.app",
-  messagingSenderId: "1001662665656",
-  appId: "1:1001662665656:web:4391d323fa90e3d10e354d"
-};
+// --- 1. CONFIGURACIÓN DE FIREBASE (Con Protección Anti-Crashes para Vite) ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : {
+      apiKey: "AIzaSyD92CDTTcEh_BJ53q8q0TXtFtO0Fj29u2w",
+      authDomain: "gestion-comercial-taptap.firebaseapp.com",
+      projectId: "gestion-comercial-taptap",
+      storageBucket: "gestion-comercial-taptap.firebasestorage.app",
+      messagingSenderId: "1001662665656",
+      appId: "1:1001662665656:web:4391d323fa90e3d10e354d"
+    };
 
-const app = initializeApp(firebaseConfig);
+// Evita que Firebase intente inicializarse dos veces al guardar el código
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "1"; // El ID de la carpeta de artifacts
+const appId = typeof __app_id !== 'undefined' ? __app_id : "1";
 
 // --- 2. TRADUCTOR DE MANAGERS (DRIVE -> PORTAL) ---
 const mapManagerToVendedor = (vendedorRaw) => {
@@ -70,11 +73,15 @@ export default function App() {
   const [formUser, setFormUser] = useState({ nombre: '', pass: '', role: 'comercial', cargo: '', agencias: '' });
   const [nuevaCita, setNuevaCita] = useState({ agencia: '', vendedor: '', fechaCruda: '', semana: '', persona: '', cuenta: '' });
 
-  // 1. Inicialización de Autenticación
+  // Inicialización de Autenticación
   useEffect(() => {
     const initAuth = async () => {
       try {
-        await signInAnonymously(auth);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
       } catch (e) { 
         console.error("Error de Auth:", e); 
       }
@@ -84,13 +91,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Carga de Datos y Semilla del Equipo
+  // Carga de Datos y Semilla del Equipo
   useEffect(() => {
     if (!userAuth) return;
 
     const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'usuarios'), (snap) => {
       if (snap.empty) {
-        // SEMILLA MAESTRA DEL EQUIPO (Nuevos roles)
+        // SEMILLA MAESTRA DEL EQUIPO
         const equipoInicial = [
           { nombre: "Alexander Mena", pass: "alex2026", role: "admin", cargo: "Admin & Comercial", agencias: "Dentsu, Havas, Mid Market" },
           { nombre: "Berenisse López", pass: "bere2026", role: "comercial", cargo: "Comercial", agencias: "Publicis, WPP, Mid Market" },
@@ -133,7 +140,6 @@ export default function App() {
       setCurrentUser(found);
       setIsLoggedIn(true);
       setLoginError('');
-      // Si no es master, forzamos su filtro a sí mismo
       if (found.role === 'comercial') {
         setFiltroVendedor(found.nombre);
       } else {
@@ -170,7 +176,7 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'citas'), {
         ...nuevaCita,
-        vendedor: currentUser.nombre, // Solo registra a su propio nombre
+        vendedor: currentUser.nombre,
         createdAt: Date.now()
       });
       setShowModalCita(false);
@@ -197,9 +203,8 @@ export default function App() {
     const totalEnviado = propuestasFiltradas.reduce((acc, p) => acc + p.montoEnviado, 0);
     const totalCerrado = propuestasFiltradas.reduce((acc, p) => acc + p.montoCerrado, 0);
     
-    // Gráfica: Si filtró por "Todos", muestra a todo el equipo, sino, solo a la persona seleccionada
     const targetUsers = filtroVendedor === 'Todos' 
-      ? usuarios.filter(u => u.role === 'comercial' || u.nombre === "Alexander Mena") // Mostramos a los que venden
+      ? usuarios.filter(u => u.role === 'comercial' || u.nombre === "Alexander Mena")
       : usuarios.filter(u => u.nombre === filtroVendedor);
 
     const chartData = targetUsers.map(u => ({
@@ -220,14 +225,12 @@ export default function App() {
   const downloadCSV = (data, filename) => {
     if (!data || data.length === 0) return;
     
-    // Quitar campos internos de base de datos
     const headers = Object.keys(data[0]).filter(k => !['id', 'createdAt'].includes(k));
     const csvRows = [headers.join(',')];
     
     for (const row of data) {
       const values = headers.map(header => {
         const val = row[header];
-        // Escapar comillas para evitar que se rompa el CSV
         const escaped = String(val || '').replace(/"/g, '""');
         return `"${escaped}"`;
       });
@@ -261,7 +264,7 @@ export default function App() {
               <select className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
                       value={loginForm.user} onChange={e => setLoginForm({...loginForm, user: e.target.value})} required>
                 <option value="">Selecciona tu perfil...</option>
-                {usuarios.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
+                {[...usuarios].sort((a,b) => a.nombre.localeCompare(b.nombre)).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
               </select>
             </div>
             <div className="space-y-2 text-left">
@@ -356,7 +359,6 @@ export default function App() {
               <KpiCard icon={Calendar} color="amber" label="Citas Activas" value={stats.countCitas} />
             </div>
 
-            {/* Gráficas visibles para admin o managers, o para comerciales si el sistema lo requiere (en este caso solo Master ve gráficas del equipo) */}
             {isMaster && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
